@@ -44,13 +44,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface.withOpacity(0.95),
+        color: AppTheme.surface.withValues(alpha: 0.95),
         border: const Border(
           top: BorderSide(color: AppTheme.glassBorder, width: 0.5),
         ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryCyan.withOpacity(0.05),
+            color: AppTheme.primaryCyan.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -102,11 +102,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
-              ? AppTheme.primaryCyan.withOpacity(0.1)
+              ? AppTheme.primaryCyan.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: isActive
-              ? Border.all(color: AppTheme.primaryCyan.withOpacity(0.2))
+              ? Border.all(color: AppTheme.primaryCyan.withValues(alpha: 0.2))
               : null,
         ),
         child: Column(
@@ -168,6 +168,8 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   NearbyPlace? _selectedPlace;
   bool _refreshingLocation = false;
   PlaceType? _placeFilter;
+  String _placeSearchQuery = '';
+  final TextEditingController _placeSearchController = TextEditingController();
 
   // Accident detection
   late final AccidentDetectionService _accidentService;
@@ -237,6 +239,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     _rippleController.dispose();
     _particleController.dispose();
     _statusController.dispose();
+    _placeSearchController.dispose();
     super.dispose();
   }
 
@@ -294,6 +297,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       }
     } catch (e) {
       debugPrint('[SOS] Error fetching nearby places: $e');
+      _showErrorSnackbar(e.toString());
       if (mounted) {
         setState(() => _loadingPlaces = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -436,7 +440,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppTheme.textMuted.withOpacity(0.4),
+                  color: AppTheme.textMuted.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -448,7 +452,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                 height: 64,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppTheme.emergencyRed.withOpacity(0.12),
+                  color: AppTheme.emergencyRed.withValues(alpha: 0.12),
                   boxShadow:
                       AppTheme.neonGlow(AppTheme.emergencyRed, intensity: 0.4),
                 ),
@@ -471,7 +475,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                 decoration: AppTheme.glassDecoration(
                   borderRadius: 14,
                   opacity: 0.06,
-                  borderColor: AppTheme.primaryCyan.withOpacity(0.15),
+                  borderColor: AppTheme.primaryCyan.withValues(alpha: 0.15),
                 ),
                 child: Column(
                   children: [
@@ -506,6 +510,27 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 20),
 
+              Container(
+                width: double.infinity,
+                height: 54,
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final url = Uri.parse(
+                      'https://maps.google.com/?q=${data.latitude},${data.longitude}',
+                    );
+
+                    await launchUrl(
+                      url,
+                      mode: LaunchMode.platformDefault,
+                    );
+                  },
+                  icon: const Icon(Icons.map),
+                  label: const Text("OPEN IN GOOGLE MAPS"),
+                ),
+              ),
+
+
               // Share button
               Container(
                 width: double.infinity,
@@ -515,7 +540,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.emergencyRed.withOpacity(0.3),
+                      color: AppTheme.emergencyRed.withValues(alpha: 0.3),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
@@ -609,9 +634,8 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                   _buildMapCard(),
                   const SizedBox(height: 8),
                   _buildMapLegend(),
-                  const SizedBox(height: 12),
-                  _buildPlaceFilterChips(),
-                  _buildPlaceCardsList(),
+                  const SizedBox(height: 20),
+                  _buildEmergencyPlacesSection(),
                   const SizedBox(height: 16),
                   _buildSOSButton(),
                   const SizedBox(height: 16),
@@ -623,7 +647,67 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               ),
             ),
           ),
+
+          // ── Temporary Test Emergency Button (for testing popup) ──
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: _buildTestEmergencyButton(),
+          ),
         ],
+      ),
+    );
+  }
+
+  // ── Temporary Test Emergency Button ────────────────────────────────────
+  Widget _buildTestEmergencyButton() {
+    return GestureDetector(
+      onTap: () {
+        AccidentAlertDialog.show(
+          context,
+          onSendSOS: _triggerSOS,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.emergencyRed.withValues(alpha: 0.9),
+              AppTheme.emergencyRedDark.withValues(alpha: 0.9),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: AppTheme.emergencyRed.withValues(alpha: 0.6),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.emergencyRed.withValues(alpha: 0.35),
+              blurRadius: 16,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Test Emergency',
+              style: AppTheme.bodyMedium.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -640,9 +724,9 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.primaryCyan.withOpacity(0.1),
+              color: AppTheme.primaryCyan.withValues(alpha: 0.1),
               border:
-                  Border.all(color: AppTheme.primaryCyan.withOpacity(0.3)),
+                  Border.all(color: AppTheme.primaryCyan.withValues(alpha: 0.3)),
             ),
             child: const Icon(Icons.public, color: AppTheme.primaryCyan, size: 22),
           ),
@@ -670,7 +754,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               gradient: AppTheme.cyanGradient,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryCyan.withOpacity(0.2),
+                  color: AppTheme.primaryCyan.withValues(alpha: 0.2),
                   blurRadius: 10,
                 ),
               ],
@@ -691,7 +775,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
         decoration: AppTheme.glassDecoration(
           borderRadius: 16,
           opacity: 0.06,
-          borderColor: AppTheme.successGreen.withOpacity(0.15),
+          borderColor: AppTheme.successGreen.withValues(alpha: 0.15),
         ),
         child: Row(
           children: [
@@ -707,7 +791,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                     boxShadow: [
                       BoxShadow(
                         color: AppTheme.successGreen
-                            .withOpacity(_statusPulse.value * 0.6),
+                            .withValues(alpha: _statusPulse.value * 0.6),
                         blurRadius: 8,
                         spreadRadius: 2,
                       ),
@@ -727,12 +811,12 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
             ),
             const Spacer(),
             Icon(Icons.shield_outlined,
-                color: AppTheme.successGreen.withOpacity(0.6), size: 18),
+                color: AppTheme.successGreen.withValues(alpha: 0.6), size: 18),
             const SizedBox(width: 6),
             Text(
               'Protected',
               style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.successGreen.withOpacity(0.8),
+                color: AppTheme.successGreen.withValues(alpha: 0.8),
               ),
             ),
           ],
@@ -768,7 +852,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                       progress: _rippleAnimation.value,
                       color: _sosPressed
                           ? AppTheme.emergencyRed
-                          : AppTheme.emergencyRed.withOpacity(0.4),
+                          : AppTheme.emergencyRed.withValues(alpha: 0.4),
                     ),
                     size: const Size(220, 220),
                   );
@@ -793,12 +877,12 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                       gradient: AppTheme.redGradient,
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.emergencyRed.withOpacity(0.5),
+                          color: AppTheme.emergencyRed.withValues(alpha: 0.5),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
                         BoxShadow(
-                          color: AppTheme.emergencyRed.withOpacity(0.2),
+                          color: AppTheme.emergencyRed.withValues(alpha: 0.2),
                           blurRadius: 60,
                           spreadRadius: 15,
                         ),
@@ -905,7 +989,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
           decoration: AppTheme.glassDecoration(
             borderRadius: 18,
             opacity: 0.06,
-            borderColor: color.withOpacity(0.2),
+            borderColor: color.withValues(alpha: 0.2),
           ),
           child: Column(
             children: [
@@ -914,10 +998,10 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                 height: 52,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.2),
+                      color: color.withValues(alpha: 0.2),
                       blurRadius: 12,
                     ),
                   ],
@@ -948,12 +1032,12 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: AppTheme.primaryCyan.withOpacity(0.2),
+            color: AppTheme.primaryCyan.withValues(alpha: 0.2),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.primaryCyan.withOpacity(0.08),
+              color: AppTheme.primaryCyan.withValues(alpha: 0.08),
               blurRadius: 20,
               spreadRadius: 2,
             ),
@@ -975,7 +1059,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all,
                   ),
-                  onTap: (_, __) {
+                  onTap: (_, _) {
                     // Dismiss selected place popup when tapping the map
                     if (_selectedPlace != null) {
                       setState(() => _selectedPlace = null);
@@ -1028,8 +1112,8 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        AppTheme.background.withOpacity(0.85),
-                        AppTheme.background.withOpacity(0.0),
+                        AppTheme.background.withValues(alpha: 0.85),
+                        AppTheme.background.withValues(alpha: 0.0),
                       ],
                     ),
                   ),
@@ -1057,7 +1141,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                             height: 12,
                             child: CircularProgressIndicator(
                               strokeWidth: 1.5,
-                              color: AppTheme.primaryCyan.withOpacity(0.6),
+                              color: AppTheme.primaryCyan.withValues(alpha: 0.6),
                             ),
                           ),
                         ),
@@ -1066,10 +1150,10 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: AppTheme.successGreen.withOpacity(0.15),
+                            color: AppTheme.successGreen.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: AppTheme.successGreen.withOpacity(0.3),
+                              color: AppTheme.successGreen.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
@@ -1124,14 +1208,14 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: AppTheme.surface.withOpacity(0.9),
+                      color: AppTheme.surface.withValues(alpha: 0.9),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppTheme.successGreen.withOpacity(0.3),
+                        color: AppTheme.successGreen.withValues(alpha: 0.3),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.successGreen.withOpacity(0.15),
+                          color: AppTheme.successGreen.withValues(alpha: 0.15),
                           blurRadius: 8,
                         ),
                       ],
@@ -1170,14 +1254,14 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: AppTheme.surface.withOpacity(0.9),
+                        color: AppTheme.surface.withValues(alpha: 0.9),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppTheme.primaryCyan.withOpacity(0.3),
+                          color: AppTheme.primaryCyan.withValues(alpha: 0.3),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.primaryCyan.withOpacity(0.15),
+                            color: AppTheme.primaryCyan.withValues(alpha: 0.15),
                             blurRadius: 8,
                           ),
                         ],
@@ -1208,12 +1292,12 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: AppTheme.surface.withOpacity(0.92),
+          color: AppTheme.surface.withValues(alpha: 0.92),
           shape: BoxShape.circle,
           border: Border.all(color: color, width: 2),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.4),
+              color: color.withValues(alpha: 0.4),
               blurRadius: 8,
               spreadRadius: 1,
             ),
@@ -1233,12 +1317,12 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: AppTheme.surface.withOpacity(0.95),
+        color: AppTheme.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1253,7 +1337,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color, size: 18),
@@ -1291,7 +1375,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                           height: 3,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppTheme.textMuted.withOpacity(0.6),
+                            color: AppTheme.textMuted.withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1333,9 +1417,9 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: color.withOpacity(0.3)),
+                border: Border.all(color: color.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1407,7 +1491,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                   height: 10,
                   child: CircularProgressIndicator(
                     strokeWidth: 1.5,
-                    color: AppTheme.primaryCyan.withOpacity(0.6),
+                    color: AppTheme.primaryCyan.withValues(alpha: 0.6),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -1450,7 +1534,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
             color: color,
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.4),
+                color: color.withValues(alpha: 0.4),
                 blurRadius: 4,
               ),
             ],
@@ -1468,108 +1552,376 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     );
   }
 
-  // ── Place Filter Chips ──────────────────────────────────────────────────
-  Widget _buildPlaceFilterChips() {
+  // ── Emergency Places Section (Advanced) ─────────────────────────────────
+  Widget _buildEmergencyPlacesSection() {
     if (_nearbyPlaces.isEmpty && !_loadingPlaces) {
       return const SizedBox.shrink();
     }
 
-    return Padding(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Section Header ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  gradient: LinearGradient(
+                    colors: [
+                      AppTheme.primaryCyan.withValues(alpha: 0.2),
+                      AppTheme.primaryCyan.withValues(alpha: 0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  border: Border.all(
+                    color: AppTheme.primaryCyan.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.emergency_outlined,
+                  color: AppTheme.primaryCyan,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'NEARBY EMERGENCY SERVICES',
+                      style: AppTheme.headingSmall.copyWith(
+                        fontSize: 13,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _loadingPlaces
+                          ? 'Scanning area...'
+                          : '${_nearbyPlaces.length} services found in your area',
+                      style: AppTheme.bodySmall.copyWith(
+                        color: AppTheme.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_loadingPlaces)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.primaryCyan.withValues(alpha: 0.6),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppTheme.successGreen.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.successGreen,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'LIVE',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppTheme.successGreen,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 9,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // ── Search Bar ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surface.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.glassBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryCyan.withValues(alpha: 0.03),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _placeSearchController,
+              onChanged: (value) =>
+                  setState(() => _placeSearchQuery = value),
+              style: AppTheme.bodyMedium.copyWith(
+                color: AppTheme.textPrimary,
+                fontSize: 14,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Search hospitals, police, ambulance...',
+                hintStyle: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.textMuted.withValues(alpha: 0.6),
+                  fontSize: 13,
+                ),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  color: AppTheme.primaryCyan.withValues(alpha: 0.5),
+                  size: 20,
+                ),
+                suffixIcon: _placeSearchQuery.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () {
+                          _placeSearchController.clear();
+                          setState(() => _placeSearchQuery = '');
+                        },
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: AppTheme.textMuted,
+                          size: 18,
+                        ),
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Filter Tabs ──
+        _buildAdvancedFilterTabs(),
+        const SizedBox(height: 12),
+
+        // ── Place Cards ──
+        _buildAdvancedPlaceCards(),
+      ],
+    );
+  }
+
+  // ── Advanced Filter Tabs ────────────────────────────────────────────────
+  Widget _buildAdvancedFilterTabs() {
+    final hospitalCount =
+        _nearbyPlaces.where((p) => p.type == PlaceType.hospital).length;
+    final policeCount =
+        _nearbyPlaces.where((p) => p.type == PlaceType.police).length;
+    final ambulanceCount =
+        _nearbyPlaces.where((p) => p.type == PlaceType.ambulance).length;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          _buildFilterChip(label: 'All', type: null),
+          _buildAdvancedFilterTab(
+            label: 'All',
+            count: _nearbyPlaces.length,
+            type: null,
+            icon: Icons.apps_rounded,
+            color: AppTheme.primaryCyan,
+          ),
           const SizedBox(width: 8),
-          _buildFilterChip(
+          _buildAdvancedFilterTab(
             label: 'Hospital',
+            count: hospitalCount,
             type: PlaceType.hospital,
-            icon: Icons.local_hospital,
+            icon: Icons.local_hospital_rounded,
+            color: const Color(0xFFFF5252),
           ),
           const SizedBox(width: 8),
-          _buildFilterChip(
+          _buildAdvancedFilterTab(
             label: 'Police',
+            count: policeCount,
             type: PlaceType.police,
-            icon: Icons.local_police,
+            icon: Icons.local_police_rounded,
+            color: const Color(0xFF448AFF),
           ),
           const SizedBox(width: 8),
-          _buildFilterChip(
+          _buildAdvancedFilterTab(
             label: 'Ambulance',
+            count: ambulanceCount,
             type: PlaceType.ambulance,
-            icon: Icons.emergency,
+            icon: Icons.emergency_rounded,
+            color: AppTheme.warningAmber,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChip({
+  Widget _buildAdvancedFilterTab({
     required String label,
+    required int count,
     required PlaceType? type,
-    IconData? icon,
+    required IconData icon,
+    required Color color,
   }) {
     final isActive = _placeFilter == type;
-    final color = type != null ? _placeColor(type) : AppTheme.primaryCyan;
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _placeFilter = type),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isActive ? color.withOpacity(0.15) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isActive ? color.withOpacity(0.5) : AppTheme.glassBorder,
-              width: isActive ? 1.5 : 0.5,
-            ),
+    return GestureDetector(
+      onTap: () => setState(() => _placeFilter = type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? color.withValues(alpha: 0.5) : AppTheme.glassBorder,
+            width: isActive ? 1.5 : 0.5,
           ),
-          child: Center(
-            child: Text(
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.15),
+                    blurRadius: 12,
+                    spreadRadius: 0,
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? color : AppTheme.textMuted,
+              size: 16,
+            ),
+            const SizedBox(width: 7),
+            Text(
               label,
               style: AppTheme.bodySmall.copyWith(
                 color: isActive ? color : AppTheme.textMuted,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 11,
-                letterSpacing: 0.5,
+                fontSize: 12,
+                letterSpacing: 0.3,
               ),
             ),
-          ),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? color.withValues(alpha: 0.2)
+                      : AppTheme.glassWhite,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '$count',
+                  style: AppTheme.bodySmall.copyWith(
+                    color: isActive ? color : AppTheme.textMuted,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 
-  // ── Place Cards List ───────────────────────────────────────────────────
-  Widget _buildPlaceCardsList() {
-    if (_nearbyPlaces.isEmpty && !_loadingPlaces) {
-      return const SizedBox.shrink();
+  // ── Advanced Place Cards ────────────────────────────────────────────────
+  Widget _buildAdvancedPlaceCards() {
+    if (_loadingPlaces) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Column(
+          children: List.generate(3, (i) => _buildShimmerCard(i)),
+        ),
+      );
     }
 
-    final filtered = _placeFilter == null
+    // Apply type filter
+    var filtered = _placeFilter == null
         ? _nearbyPlaces
         : _nearbyPlaces.where((p) => p.type == _placeFilter).toList();
 
-    if (_loadingPlaces) {
+    // Apply search filter
+    if (_placeSearchQuery.isNotEmpty) {
+      final query = _placeSearchQuery.toLowerCase();
+      filtered = filtered
+          .where((p) =>
+              p.name.toLowerCase().contains(query) ||
+              (p.address?.toLowerCase().contains(query) ?? false) ||
+              _placeLabel(p.type).toLowerCase().contains(query))
+          .toList();
+    }
+
+    if (filtered.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: AppTheme.glassDecoration(
+            borderRadius: 16,
+            opacity: 0.04,
+          ),
+          child: Column(
             children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppTheme.primaryCyan.withOpacity(0.6),
-                ),
+              Icon(
+                Icons.search_off_rounded,
+                color: AppTheme.textMuted.withValues(alpha: 0.4),
+                size: 40,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(height: 12),
               Text(
-                'Finding nearby places...',
-                style: AppTheme.bodySmall.copyWith(
+                _placeSearchQuery.isNotEmpty
+                    ? 'No results for "$_placeSearchQuery"'
+                    : 'No ${_placeFilter != null ? '${_placeLabel(_placeFilter!).toLowerCase()}s' : 'places'} found nearby',
+                style: AppTheme.bodyMedium.copyWith(
                   color: AppTheme.textMuted,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Try a different filter or search term',
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.textMuted.withValues(alpha: 0.6),
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -1578,268 +1930,560 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       );
     }
 
-    if (filtered.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Center(
-          child: Text(
-            'No ${_placeFilter != null ? _placeLabel(_placeFilter!).toLowerCase() + "s" : "places"} found nearby',
-            style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
-          ),
-        ),
-      );
-    }
-
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              'NEARBY EMERGENCY SERVICES',
-              style: AppTheme.bodySmall.copyWith(
-                letterSpacing: 2,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...filtered.take(10).map((place) => _buildPlaceCard(place)),
-        ],
+        children: filtered
+            .take(15)
+            .toList()
+            .asMap()
+            .entries
+            .map((entry) => _buildAdvancedPlaceCard(entry.value, entry.key))
+            .toList(),
       ),
     );
   }
 
-  Widget _buildPlaceCard(NearbyPlace place) {
-    final color = _placeColor(place.type);
-    final icon = _placeIcon(place.type);
-    final typeLabel = _placeLabel(place.type);
-
+  Widget _buildShimmerCard(int index) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: AppTheme.glassDecoration(
           borderRadius: 16,
-          opacity: 0.06,
-          borderColor: color.withOpacity(0.15),
+          opacity: 0.04,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top row: icon + name + status badge
             Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
+                    color: AppTheme.glassWhite,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.2),
-                        blurRadius: 8,
-                      ),
-                    ],
                   ),
-                  child: Icon(icon, color: color, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        place.name,
-                        style: AppTheme.bodyMedium.copyWith(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
+                      Container(
+                        height: 14,
+                        width: 120 + (index * 20.0),
+                        decoration: BoxDecoration(
+                          color: AppTheme.glassWhite,
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        typeLabel,
-                        style: AppTheme.bodySmall.copyWith(
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 10,
+                        width: 80,
+                        decoration: BoxDecoration(
+                          color: AppTheme.glassWhite,
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     ],
                   ),
                 ),
-                // Status badge
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  width: 60,
+                  height: 24,
                   decoration: BoxDecoration(
-                    color: place.isNearby
-                        ? AppTheme.successGreen.withOpacity(0.12)
-                        : AppTheme.primaryCyan.withOpacity(0.1),
+                    color: AppTheme.glassWhite,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: place.isNearby
-                          ? AppTheme.successGreen.withOpacity(0.3)
-                          : AppTheme.primaryCyan.withOpacity(0.2),
-                    ),
-                  ),
-                  child: Text(
-                    place.statusLabel,
-                    style: AppTheme.bodySmall.copyWith(
-                      color: place.isNearby
-                          ? AppTheme.successGreen
-                          : AppTheme.primaryCyan,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                      letterSpacing: 0.5,
-                    ),
                   ),
                 ),
               ],
             ),
-
-            // Address
-            if (place.address != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(Icons.location_on_outlined,
-                      color: AppTheme.textMuted, size: 14),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      place.address!,
-                      style: AppTheme.bodySmall.copyWith(
-                        color: AppTheme.textSecondary,
-                        fontSize: 12,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 12),
+            Container(
+              height: 10,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppTheme.glassWhite,
+                borderRadius: BorderRadius.circular(4),
               ),
-            ],
-
-            // Distance + Travel time row
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.straighten,
-                    color: AppTheme.textMuted, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  place.distanceText,
-                  style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Icon(Icons.access_time,
-                    color: AppTheme.textMuted, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  '~${place.estimatedTravelTime}',
-                  style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
             ),
-
-            // Action buttons
             const SizedBox(height: 12),
             Row(
               children: [
-                // Navigate button
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      final url = Uri.parse(
-                        'https://www.google.com/maps/dir/?api=1'
-                        '&origin=${_currentLat ?? ''},${_currentLng ?? ''}'
-                        '&destination=${place.latitude},${place.longitude}'
-                        '&travelmode=driving',
-                      );
-                      launchUrl(url, mode: LaunchMode.externalApplication);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: color.withOpacity(0.25)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.directions, color: color, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Navigate',
-                            style: AppTheme.bodySmall.copyWith(
-                              color: color,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
+                  child: Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassWhite,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),
-                // Call button (only if phone available)
-                if (place.phone != null) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        final url = Uri.parse('tel:${place.phone}');
-                        launchUrl(url);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.successGreen.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppTheme.successGreen.withOpacity(0.25),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassWhite,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdvancedPlaceCard(NearbyPlace place, int index) {
+    final color = _placeColor(place.type);
+    final icon = _placeIcon(place.type);
+    final typeLabel = _placeLabel(place.type);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.surface.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: color.withValues(alpha: 0.12),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: color.withValues(alpha: 0.04),
+              blurRadius: 20,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            children: [
+              // Gradient accent line on left
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        color,
+                        color.withValues(alpha: 0.3),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Card content
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Top Row: Icon + Name + Badge ──
+                    Row(
+                      children: [
+                        // Type icon with gradient background
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(13),
+                            gradient: LinearGradient(
+                              colors: [
+                                color.withValues(alpha: 0.2),
+                                color.withValues(alpha: 0.08),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.25),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.15),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Icon(icon, color: color, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        // Name + Type
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                place.name,
+                                style: AppTheme.bodyMedium.copyWith(
+                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: color,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: color.withValues(alpha: 0.5),
+                                          blurRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    typeLabel,
+                                    style: AppTheme.bodySmall.copyWith(
+                                      color: color.withValues(alpha: 0.9),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
+                        // Status badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: place.isNearby
+                                  ? [
+                                      AppTheme.successGreen.withValues(alpha: 0.15),
+                                      AppTheme.successGreen.withValues(alpha: 0.05),
+                                    ]
+                                  : [
+                                      AppTheme.primaryCyan.withValues(alpha: 0.12),
+                                      AppTheme.primaryCyan.withValues(alpha: 0.04),
+                                    ],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: place.isNearby
+                                  ? AppTheme.successGreen.withValues(alpha: 0.3)
+                                  : AppTheme.primaryCyan.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: place.isNearby
+                                      ? AppTheme.successGreen
+                                      : AppTheme.primaryCyan,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                place.statusLabel,
+                                style: AppTheme.bodySmall.copyWith(
+                                  color: place.isNearby
+                                      ? AppTheme.successGreen
+                                      : AppTheme.primaryCyan,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // ── Address ──
+                    if (place.address != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.glassWhite.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.phone, color: AppTheme.successGreen,
-                                size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Call',
-                              style: AppTheme.bodySmall.copyWith(
-                                color: AppTheme.successGreen,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
+                            Icon(
+                              Icons.location_on_outlined,
+                              color: AppTheme.textMuted.withValues(alpha: 0.7),
+                              size: 15,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                place.address!,
+                                style: AppTheme.bodySmall.copyWith(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  height: 1.3,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
                       ),
+                    ],
+
+                    // ── Distance + Travel Time ──
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        // Distance chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryCyan.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppTheme.primaryCyan.withValues(alpha: 0.15),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.straighten_rounded,
+                                color: AppTheme.primaryCyan.withValues(alpha: 0.8),
+                                size: 13,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                place.distanceText,
+                                style: AppTheme.bodySmall.copyWith(
+                                  color: AppTheme.primaryCyan,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Travel time chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.warningAmber.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppTheme.warningAmber.withValues(alpha: 0.15),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.access_time_rounded,
+                                color: AppTheme.warningAmber.withValues(alpha: 0.8),
+                                size: 13,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                '~${place.estimatedTravelTime}',
+                                style: AppTheme.bodySmall.copyWith(
+                                  color: AppTheme.warningAmber,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Phone indicator
+                        if (place.phone != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.successGreen.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color:
+                                    AppTheme.successGreen.withValues(alpha: 0.15),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.phone_rounded,
+                              color: AppTheme.successGreen.withValues(alpha: 0.8),
+                              size: 13,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
-                ],
-              ],
-            ),
-          ],
+
+                    // ── Action Buttons ──
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        // Navigate button
+                        Expanded(
+                          flex: place.phone != null ? 3 : 1,
+                          child: GestureDetector(
+                            onTap: () {
+                              final url = Uri.parse(
+                                'https://www.google.com/maps/dir/?api=1'
+                                '&origin=${_currentLat ?? ''},${_currentLng ?? ''}'
+                                '&destination=${place.latitude},${place.longitude}'
+                                '&travelmode=driving',
+                              );
+                              launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            },
+                            child: Container(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 11),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    color.withValues(alpha: 0.2),
+                                    color.withValues(alpha: 0.08),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: color.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.directions_rounded,
+                                    color: color,
+                                    size: 17,
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Text(
+                                    'Navigate',
+                                    style: AppTheme.bodySmall.copyWith(
+                                      color: color,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Call button
+                        if (place.phone != null) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: GestureDetector(
+                              onTap: () {
+                                final url =
+                                    Uri.parse('tel:${place.phone}');
+                                launchUrl(url);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 11),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppTheme.successGreen
+                                          .withValues(alpha: 0.2),
+                                      AppTheme.successGreen
+                                          .withValues(alpha: 0.08),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppTheme.successGreen
+                                        .withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.phone_rounded,
+                                      color: AppTheme.successGreen,
+                                      size: 17,
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Text(
+                                      'Call',
+                                      style: AppTheme.bodySmall.copyWith(
+                                        color: AppTheme.successGreen,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1895,10 +2539,10 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: markerBlue
-                      .withOpacity(0.12 * (1 - _statusPulse.value * 0.5)),
+                      .withValues(alpha: 0.12 * (1 - _statusPulse.value * 0.5)),
                   border: Border.all(
                     color: markerBlue
-                        .withOpacity(0.35 * (1 - _statusPulse.value * 0.5)),
+                        .withValues(alpha: 0.35 * (1 - _statusPulse.value * 0.5)),
                     width: 1.5,
                   ),
                 ),
@@ -1913,7 +2557,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                   border: Border.all(color: Colors.white, width: 3),
                   boxShadow: [
                     BoxShadow(
-                      color: markerBlue.withOpacity(0.6),
+                      color: markerBlue.withValues(alpha: 0.6),
                       blurRadius: 12,
                       spreadRadius: 3,
                     ),
@@ -1940,12 +2584,12 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
         child: Row(
           children: [
             Icon(Icons.location_on_outlined,
-                color: AppTheme.primaryCyan.withOpacity(0.7), size: 20),
+                color: AppTheme.primaryCyan.withValues(alpha: 0.7), size: 20),
             const SizedBox(width: 10),
             Text(
               _gpsCoords,
               style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.primaryCyan.withOpacity(0.8),
+                color: AppTheme.primaryCyan.withValues(alpha: 0.8),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1990,7 +2634,7 @@ class _RipplePainter extends CustomPainter {
       final opacity = (1 - ringProgress) * 0.4;
 
       final paint = Paint()
-        ..color = color.withOpacity(opacity.clamp(0.0, 1.0))
+        ..color = color.withValues(alpha: opacity.clamp(0.0, 1.0))
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
 
@@ -2022,7 +2666,7 @@ class _ParticlePainter extends CustomPainter {
       final opacity = 0.06 + random.nextDouble() * 0.2;
 
       paint.color = (i % 7 == 0 ? AppTheme.primaryCyan : Colors.white)
-          .withOpacity(opacity);
+          .withValues(alpha: opacity);
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }

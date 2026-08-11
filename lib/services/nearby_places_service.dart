@@ -30,7 +30,14 @@ out center;
 
     final response = await http.post(
       Uri.parse(_overpassUrl),
-      body: {'data': query},
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'AI Smart SOS/1.0',
+        'Accept': 'application/json',
+      },
+      body: {
+        'data': query,
+      },
     );
 
     if (response.statusCode != 200) {

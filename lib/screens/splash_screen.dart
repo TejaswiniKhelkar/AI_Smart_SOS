@@ -129,8 +129,8 @@ class _SplashScreenState extends State<SplashScreen>
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const LoginScreen(),
-          transitionsBuilder: (_, animation, __, child) {
+          pageBuilder: (_, _, _) => const LoginScreen(),
+          transitionsBuilder: (_, animation, _, child) {
             return FadeTransition(opacity: animation, child: child);
           },
           transitionDuration: const Duration(milliseconds: 800),
@@ -205,13 +205,13 @@ class _SplashScreenState extends State<SplashScreen>
                                 boxShadow: [
                                   BoxShadow(
                                     color:
-                                        AppTheme.primaryCyan.withOpacity(0.25),
+                                        AppTheme.primaryCyan.withValues(alpha: 0.25),
                                     blurRadius: 40,
                                     spreadRadius: 10,
                                   ),
                                   BoxShadow(
                                     color:
-                                        AppTheme.primaryCyan.withOpacity(0.1),
+                                        AppTheme.primaryCyan.withValues(alpha: 0.1),
                                     blurRadius: 80,
                                     spreadRadius: 20,
                                   ),
@@ -244,11 +244,11 @@ class _SplashScreenState extends State<SplashScreen>
                             style: AppTheme.headingLarge.copyWith(
                               shadows: [
                                 Shadow(
-                                  color: AppTheme.primaryCyan.withOpacity(0.8),
+                                  color: AppTheme.primaryCyan.withValues(alpha: 0.8),
                                   blurRadius: _glowAnimation.value,
                                 ),
                                 Shadow(
-                                  color: AppTheme.primaryCyan.withOpacity(0.4),
+                                  color: AppTheme.primaryCyan.withValues(alpha: 0.4),
                                   blurRadius: _glowAnimation.value * 2,
                                 ),
                               ],
@@ -272,7 +272,7 @@ class _SplashScreenState extends State<SplashScreen>
                             Text(
                               'Intelligent Emergency Response',
                               style: AppTheme.bodyLarge.copyWith(
-                                color: AppTheme.textSecondary.withOpacity(0.8),
+                                color: AppTheme.textSecondary.withValues(alpha: 0.8),
                                 letterSpacing: 1.5,
                               ),
                             ),
@@ -283,9 +283,9 @@ class _SplashScreenState extends State<SplashScreen>
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    AppTheme.primaryCyan.withOpacity(0),
+                                    AppTheme.primaryCyan.withValues(alpha: 0),
                                     AppTheme.primaryCyan,
-                                    AppTheme.primaryCyan.withOpacity(0),
+                                    AppTheme.primaryCyan.withValues(alpha: 0),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(1),
@@ -340,7 +340,7 @@ class _GlobePainter extends CustomPainter {
 
     // Outer circle
     final outerPaint = Paint()
-      ..color = AppTheme.primaryCyan.withOpacity(0.6)
+      ..color = AppTheme.primaryCyan.withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawCircle(center, radius, outerPaint);
@@ -349,14 +349,14 @@ class _GlobePainter extends CustomPainter {
     final fillPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          AppTheme.primaryCyan.withOpacity(0.08),
-          AppTheme.background.withOpacity(0.9),
+          AppTheme.primaryCyan.withValues(alpha: 0.08),
+          AppTheme.background.withValues(alpha: 0.9),
         ],
       ).createShader(Rect.fromCircle(center: center, radius: radius));
     canvas.drawCircle(center, radius, fillPaint);
 
     final linePaint = Paint()
-      ..color = AppTheme.primaryCyan.withOpacity(0.25)
+      ..color = AppTheme.primaryCyan.withValues(alpha: 0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8;
 
@@ -395,7 +395,7 @@ class _GlobePainter extends CustomPainter {
 
     // Equator (brighter)
     final equatorPaint = Paint()
-      ..color = AppTheme.primaryCyan.withOpacity(0.5)
+      ..color = AppTheme.primaryCyan.withValues(alpha: 0.5)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     canvas.drawOval(
@@ -428,7 +428,7 @@ class _OrbitalRingsPainter extends CustomPainter {
       canvas.rotate(angle * (i.isEven ? 1 : -0.7));
 
       final paint = Paint()
-        ..color = AppTheme.primaryCyan.withOpacity(opacity.clamp(0.05, 0.2))
+        ..color = AppTheme.primaryCyan.withValues(alpha: opacity.clamp(0.05, 0.2))
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0;
 
@@ -446,7 +446,7 @@ class _OrbitalRingsPainter extends CustomPainter {
       final dotX = cos(dotAngle) * ringRadius;
       final dotY = sin(dotAngle) * ringRadius * 0.175;
       final dotPaint = Paint()
-        ..color = AppTheme.primaryCyan.withOpacity(0.6);
+        ..color = AppTheme.primaryCyan.withValues(alpha: 0.6);
       canvas.drawCircle(Offset(dotX, dotY), 2.5, dotPaint);
 
       canvas.restore();
@@ -527,11 +527,11 @@ class _StarFieldPainter extends CustomPainter {
       final opacity = 0.05 + twinkle * 0.25;
 
       if (i % 8 == 0) {
-        paint.color = AppTheme.primaryCyan.withOpacity(opacity);
+        paint.color = AppTheme.primaryCyan.withValues(alpha: opacity);
       } else if (i % 13 == 0) {
-        paint.color = AppTheme.emergencyRed.withOpacity(opacity * 0.5);
+        paint.color = AppTheme.emergencyRed.withValues(alpha: opacity * 0.5);
       } else {
-        paint.color = Colors.white.withOpacity(opacity);
+        paint.color = Colors.white.withValues(alpha: opacity);
       }
 
       canvas.drawCircle(Offset(x, y), radius, paint);

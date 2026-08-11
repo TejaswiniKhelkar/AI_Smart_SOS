@@ -131,10 +131,10 @@ class _SignupScreenState extends State<SignupScreen>
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: AppTheme.surface.withOpacity(0.6),
+                                color: AppTheme.surface.withValues(alpha: 0.6),
                                 border: Border.all(
                                     color:
-                                        AppTheme.glassBorder.withOpacity(0.3)),
+                                        AppTheme.glassBorder.withValues(alpha: 0.3)),
                               ),
                               child: const Icon(Icons.arrow_back_ios_new,
                                   color: AppTheme.primaryCyan, size: 18),
@@ -200,19 +200,15 @@ class _SignupScreenState extends State<SignupScreen>
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isActive
-                      ? AppTheme.primaryCyan.withOpacity(progress)
-                      : AppTheme.surface,
+                  color: AppTheme.primaryCyan.withValues(alpha: progress),
                   border: Border.all(
-                    color: isActive
-                        ? AppTheme.primaryCyan.withOpacity(progress)
-                        : AppTheme.textMuted.withOpacity(0.3),
+                    color: AppTheme.primaryCyan.withValues(alpha: progress),
                     width: 1.5,
                   ),
                   boxShadow: isActive && progress > 0.5
                       ? [
                           BoxShadow(
-                            color: AppTheme.primaryCyan.withOpacity(0.3),
+                            color: AppTheme.primaryCyan.withValues(alpha: 0.3),
                             blurRadius: 8,
                           )
                         ]
@@ -241,8 +237,8 @@ class _SignupScreenState extends State<SignupScreen>
                       gradient: LinearGradient(
                         colors: [
                           AppTheme.primaryCyan
-                              .withOpacity(progress.clamp(0.0, 1.0)),
-                          AppTheme.primaryCyan.withOpacity(
+                              .withValues(alpha: progress.clamp(0.0, 1.0)),
+                          AppTheme.primaryCyan.withValues(alpha: 
                               ((_stepAnimation.value * 3 - i - 0.5)
                                   .clamp(0.0, 1.0))),
                         ],
@@ -264,7 +260,7 @@ class _SignupScreenState extends State<SignupScreen>
       decoration: AppTheme.glassDecoration(
         borderRadius: 24,
         opacity: 0.08,
-        borderColor: AppTheme.primaryCyan.withOpacity(0.15),
+        borderColor: AppTheme.primaryCyan.withValues(alpha: 0.15),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,13 +303,13 @@ class _SignupScreenState extends State<SignupScreen>
           Row(
             children: [
               Icon(Icons.info_outline,
-                  size: 14, color: AppTheme.primaryCyan.withOpacity(0.6)),
+                  size: 14, color: AppTheme.primaryCyan.withValues(alpha: 0.6)),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   'Used as emergency contact number',
                   style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.primaryCyan.withOpacity(0.6),
+                    color: AppTheme.primaryCyan.withValues(alpha: 0.6),
                     fontSize: 12,
                   ),
                 ),
@@ -435,7 +431,7 @@ class _SignupScreenState extends State<SignupScreen>
               boxShadow: _agreedToTerms
                   ? [
                       BoxShadow(
-                        color: AppTheme.primaryCyan.withOpacity(0.3),
+                        color: AppTheme.primaryCyan.withValues(alpha: 0.3),
                         blurRadius: 20,
                         offset: const Offset(0, 4),
                       ),
@@ -520,7 +516,7 @@ class _ParticlePainter extends CustomPainter {
       final opacity = 0.08 + random.nextDouble() * 0.25;
 
       paint.color = (i % 6 == 0 ? AppTheme.primaryCyan : Colors.white)
-          .withOpacity(opacity);
+          .withValues(alpha: opacity);
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }

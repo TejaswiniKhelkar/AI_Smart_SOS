@@ -179,9 +179,9 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.emergencyRed.withOpacity(0.1),
+              color: AppTheme.emergencyRed.withValues(alpha: 0.1),
               border:
-                  Border.all(color: AppTheme.emergencyRed.withOpacity(0.3)),
+                  Border.all(color: AppTheme.emergencyRed.withValues(alpha: 0.3)),
             ),
             child: const Icon(Icons.history,
                 color: AppTheme.emergencyRed, size: 22),
@@ -208,16 +208,16 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppTheme.emergencyRed.withOpacity(0.1),
+                  color: AppTheme.emergencyRed.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                      color: AppTheme.emergencyRed.withOpacity(0.2)),
+                      color: AppTheme.emergencyRed.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.delete_outline,
-                        color: AppTheme.emergencyRed.withOpacity(0.8),
+                        color: AppTheme.emergencyRed.withValues(alpha: 0.8),
                         size: 16),
                     const SizedBox(width: 4),
                     Text(
@@ -247,12 +247,12 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
             height: 100,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.successGreen.withOpacity(0.08),
+              color: AppTheme.successGreen.withValues(alpha: 0.08),
               border:
-                  Border.all(color: AppTheme.successGreen.withOpacity(0.15)),
+                  Border.all(color: AppTheme.successGreen.withValues(alpha: 0.15)),
             ),
             child: Icon(Icons.verified_user_outlined,
-                color: AppTheme.successGreen.withOpacity(0.5), size: 44),
+                color: AppTheme.successGreen.withValues(alpha: 0.5), size: 44),
           ),
           const SizedBox(height: 24),
           Text('No Alerts Triggered', style: AppTheme.headingSmall),
@@ -300,7 +300,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                   color: color,
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.4),
+                      color: color.withValues(alpha: 0.4),
                       blurRadius: 8,
                     ),
                   ],
@@ -315,8 +315,8 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        color.withOpacity(0.4),
-                        color.withOpacity(0.05),
+                        color.withValues(alpha: 0.4),
+                        color.withValues(alpha: 0.05),
                       ],
                     ),
                   ),
@@ -332,7 +332,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
               decoration: AppTheme.glassDecoration(
                 borderRadius: 16,
                 opacity: 0.06,
-                borderColor: color.withOpacity(0.15),
+                borderColor: color.withValues(alpha: 0.15),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,10 +345,10 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                         height: 38,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: color.withOpacity(0.12),
+                          color: color.withValues(alpha: 0.12),
                           boxShadow: [
                             BoxShadow(
-                              color: color.withOpacity(0.2),
+                              color: color.withValues(alpha: 0.2),
                               blurRadius: 10,
                             ),
                           ],
@@ -378,13 +378,13 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                             horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: alert.status == 'sent'
-                              ? AppTheme.successGreen.withOpacity(0.12)
-                              : AppTheme.textMuted.withOpacity(0.12),
+                              ? AppTheme.successGreen.withValues(alpha: 0.12)
+                              : AppTheme.textMuted.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: alert.status == 'sent'
-                                ? AppTheme.successGreen.withOpacity(0.25)
-                                : AppTheme.textMuted.withOpacity(0.25),
+                                ? AppTheme.successGreen.withValues(alpha: 0.25)
+                                : AppTheme.textMuted.withValues(alpha: 0.25),
                           ),
                         ),
                         child: Text(
@@ -434,10 +434,10 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryCyan.withOpacity(0.08),
+                        color: AppTheme.primaryCyan.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: AppTheme.primaryCyan.withOpacity(0.15)),
+                            color: AppTheme.primaryCyan.withValues(alpha: 0.15)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -455,7 +455,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                           ),
                           const SizedBox(width: 6),
                           Icon(Icons.open_in_new,
-                              color: AppTheme.primaryCyan.withOpacity(0.6),
+                              color: AppTheme.primaryCyan.withValues(alpha: 0.6),
                               size: 14),
                         ],
                       ),
@@ -490,7 +490,7 @@ class _ParticlePainter extends CustomPainter {
       final opacity = 0.06 + random.nextDouble() * 0.2;
 
       paint.color = (i % 7 == 0 ? AppTheme.primaryCyan : Colors.white)
-          .withOpacity(opacity);
+          .withValues(alpha: opacity);
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }

@@ -70,8 +70,8 @@ class _LoginScreenState extends State<LoginScreen>
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const HomeScreen(),
-          transitionsBuilder: (_, anim, __, child) =>
+          pageBuilder: (_, _, _) => const HomeScreen(),
+          transitionsBuilder: (_, anim, _, child) =>
               FadeTransition(opacity: anim, child: child),
           transitionDuration: const Duration(milliseconds: 600),
         ),
@@ -135,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen>
           height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppTheme.primaryCyan.withOpacity(0.1),
+            color: AppTheme.primaryCyan.withValues(alpha: 0.1),
             boxShadow: AppTheme.neonGlow(AppTheme.primaryCyan, intensity: 0.5),
           ),
           child: const Icon(
@@ -150,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen>
         Text(
           'Secure Access Portal',
           style: AppTheme.bodyMedium.copyWith(
-            color: AppTheme.primaryCyan.withOpacity(0.7),
+            color: AppTheme.primaryCyan.withValues(alpha: 0.7),
             letterSpacing: 3,
           ),
         ),
@@ -164,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen>
       decoration: AppTheme.glassDecoration(
         borderRadius: 24,
         opacity: 0.08,
-        borderColor: AppTheme.primaryCyan.withOpacity(0.15),
+        borderColor: AppTheme.primaryCyan.withValues(alpha: 0.15),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen>
                   boxShadow: [
                     BoxShadow(
                       color: AppTheme.primaryCyan
-                          .withOpacity(_buttonGlowAnimation.value * 0.4),
+                          .withValues(alpha: _buttonGlowAnimation.value * 0.4),
                       blurRadius: 20,
                       spreadRadius: 1,
                       offset: const Offset(0, 4),
@@ -303,7 +303,7 @@ class _LoginScreenState extends State<LoginScreen>
                 shape: BoxShape.circle,
                 color: AppTheme.surface,
                 border: Border.all(
-                  color: AppTheme.primaryCyan.withOpacity(0.3),
+                  color: AppTheme.primaryCyan.withValues(alpha: 0.3),
                 ),
               ),
               child: IconButton(
@@ -338,8 +338,8 @@ class _LoginScreenState extends State<LoginScreen>
             Navigator.push(
               context,
               PageRouteBuilder(
-                pageBuilder: (_, __, ___) => const SignupScreen(),
-                transitionsBuilder: (_, anim, __, child) {
+                pageBuilder: (_, _, _) => const SignupScreen(),
+                transitionsBuilder: (_, anim, _, child) {
                   return SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(1, 0),
@@ -387,7 +387,7 @@ class _ParticlePainter extends CustomPainter {
       final opacity = 0.1 + random.nextDouble() * 0.3;
 
       paint.color = (i % 5 == 0 ? AppTheme.primaryCyan : Colors.white)
-          .withOpacity(opacity);
+          .withValues(alpha: opacity);
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }

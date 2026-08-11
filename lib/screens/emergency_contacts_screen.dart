@@ -108,7 +108,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: AppTheme.textMuted.withOpacity(0.4),
+                          color: AppTheme.textMuted.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -159,7 +159,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppTheme.surface.withOpacity(0.8),
+                        color: AppTheme.surface.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: AppTheme.glassBorder),
                       ),
@@ -207,7 +207,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.primaryCyan.withOpacity(0.3),
+                            color: AppTheme.primaryCyan.withValues(alpha: 0.3),
                             blurRadius: 16,
                             offset: const Offset(0, 4),
                           ),
@@ -257,7 +257,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    'Maximum ${ContactService.maxContacts} contacts allowed',
+                                    'Emergency contact saved successfully.',
                                     style: AppTheme.bodyMedium
                                         .copyWith(color: Colors.white),
                                   ),
@@ -272,7 +272,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                             }
                           }
 
-                          if (mounted) Navigator.pop(ctx);
+                          if (ctx.mounted) Navigator.pop(ctx);
                           _loadContacts();
                         },
                         shape: RoundedRectangleBorder(
@@ -403,9 +403,9 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.primaryCyan.withOpacity(0.1),
+              color: AppTheme.primaryCyan.withValues(alpha: 0.1),
               border:
-                  Border.all(color: AppTheme.primaryCyan.withOpacity(0.3)),
+                  Border.all(color: AppTheme.primaryCyan.withValues(alpha: 0.3)),
             ),
             child: const Icon(Icons.contacts_outlined,
                 color: AppTheme.primaryCyan, size: 22),
@@ -419,7 +419,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                 style: AppTheme.headingSmall.copyWith(fontSize: 14),
               ),
               Text(
-                '${_contacts.length}/${ContactService.maxContacts} contacts',
+                '${_contacts.length} contact${_contacts.length == 1 ? '' : 's'}',
                 style: AppTheme.bodySmall.copyWith(fontSize: 11),
               ),
             ],
@@ -428,16 +428,16 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppTheme.primaryCyan.withOpacity(0.1),
+              color: AppTheme.primaryCyan.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
               border:
-                  Border.all(color: AppTheme.primaryCyan.withOpacity(0.2)),
+                  Border.all(color: AppTheme.primaryCyan.withValues(alpha: 0.2)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.shield_outlined,
-                    color: AppTheme.primaryCyan.withOpacity(0.8), size: 16),
+                    color: AppTheme.primaryCyan.withValues(alpha: 0.8), size: 16),
                 const SizedBox(width: 4),
                 Text(
                   'Trusted',
@@ -465,12 +465,12 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
             height: 100,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.primaryCyan.withOpacity(0.08),
+              color: AppTheme.primaryCyan.withValues(alpha: 0.08),
               border:
-                  Border.all(color: AppTheme.primaryCyan.withOpacity(0.15)),
+                  Border.all(color: AppTheme.primaryCyan.withValues(alpha: 0.15)),
             ),
             child: Icon(Icons.person_add_outlined,
-                color: AppTheme.primaryCyan.withOpacity(0.5), size: 44),
+                color: AppTheme.primaryCyan.withValues(alpha: 0.5), size: 44),
           ),
           const SizedBox(height: 24),
           Text('No Emergency Contacts', style: AppTheme.headingSmall),
@@ -533,7 +533,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
       decoration: AppTheme.glassDecoration(
         borderRadius: 18,
         opacity: 0.06,
-        borderColor: accentColor.withOpacity(0.15),
+        borderColor: accentColor.withValues(alpha: 0.15),
       ),
       child: Material(
         color: Colors.transparent,
@@ -551,12 +551,12 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                   height: 52,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: accentColor.withOpacity(0.12),
+                    color: accentColor.withValues(alpha: 0.12),
                     border: Border.all(
-                        color: accentColor.withOpacity(0.25), width: 1.5),
+                        color: accentColor.withValues(alpha: 0.25), width: 1.5),
                     boxShadow: [
                       BoxShadow(
-                        color: accentColor.withOpacity(0.15),
+                        color: accentColor.withValues(alpha: 0.15),
                         blurRadius: 12,
                       ),
                     ],
@@ -605,9 +605,9 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.1),
+                    color: accentColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: accentColor.withOpacity(0.2)),
+                    border: Border.all(color: accentColor.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -635,7 +635,6 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
   }
 
   Widget _buildFAB() {
-    if (_contacts.length >= ContactService.maxContacts) return const SizedBox();
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -669,7 +668,7 @@ class _ParticlePainter extends CustomPainter {
       final opacity = 0.06 + random.nextDouble() * 0.2;
 
       paint.color = (i % 7 == 0 ? AppTheme.primaryCyan : Colors.white)
-          .withOpacity(opacity);
+          .withValues(alpha: opacity);
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }

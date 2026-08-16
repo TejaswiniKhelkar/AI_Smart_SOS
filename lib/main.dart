@@ -3,6 +3,7 @@ import 'screens/splash_screen.dart';
 import 'app_theme.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const SmartSOSApp());
 }
 

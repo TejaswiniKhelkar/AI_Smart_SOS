@@ -11,10 +11,12 @@ import '../services/location_service.dart';
 import '../services/alert_service.dart';
 import '../services/contact_service.dart';
 import '../services/nearby_places_service.dart';
+import 'ai_emergency_dashboard_screen.dart';
 import 'emergency_contacts_screen.dart';
 import 'alert_history_screen.dart';
 import 'accident_alert_dialog.dart';
 import '../services/accident_detection_service.dart';
+import '../services/location_tracking_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -175,6 +177,9 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   late final AccidentDetectionService _accidentService;
   bool _accidentDialogShowing = false;
 
+  // Continuous location tracking
+  final LocationTrackingService _locationTracker = LocationTrackingService();
+
   @override
   void initState() {
     super.initState();
@@ -216,6 +221,9 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     // Fetch initial location
     _fetchLocation();
 
+    // Start continuous location tracking (updates _locationTracker.latestLocation)
+    _startLocationTracking();
+
     // Start accident detection
     _accidentService = AccidentDetectionService();
     _accidentService.startListening(
@@ -234,6 +242,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _locationTracker.stopTracking();
     _accidentService.stopListening();
     _sosController.dispose();
     _rippleController.dispose();
@@ -275,6 +284,50 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
           _locationText = e.toString();
         });
       }
+    }
+  }
+
+  /// Starts continuous background location tracking via [LocationTrackingService].
+  ///
+  /// Each new position update refreshes the on-screen coordinates, map camera,
+  /// and keeps [_locationTracker.latestLocation] available for the SOS workflow.
+  /// Permission/GPS errors are caught once and shown via snackbar — no repeated
+  /// popups because the service itself guards against duplicate streams.
+  Future<void> _startLocationTracking() async {
+    try {
+      await _locationTracker.startTracking(
+        onUpdate: (locationData) {
+          if (!mounted) return;
+          setState(() {
+            _currentLat = locationData.latitude;
+            _currentLng = locationData.longitude;
+            _gpsCoords =
+                '${locationData.latitude.toStringAsFixed(4)}°, '
+                '${locationData.longitude.toStringAsFixed(4)}°';
+            _locationText = 'Live location active';
+          });
+
+          // Keep map camera centred on the latest position
+          try {
+            _mapController.move(
+              LatLng(locationData.latitude, locationData.longitude),
+              _mapController.camera.zoom, // preserve current zoom
+            );
+          } catch (_) {
+            // MapController may not be ready on first frames
+          }
+        },
+      );
+    } on LocationException catch (e) {
+      if (mounted) {
+        _showErrorSnackbar(e.message);
+        setState(() {
+          _locationText = e.message;
+        });
+      }
+    } catch (e) {
+      // Silently log non-critical errors (e.g. web/unsupported platform)
+      debugPrint('[LocationTracking] Could not start tracking: $e');
     }
   }
 
@@ -970,6 +1023,8 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          _buildAssistantCard(),
         ],
       ),
     );
@@ -1018,6 +1073,68 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssistantCard() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AiEmergencyDashboardScreen(),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+        decoration: AppTheme.glassDecoration(
+          borderRadius: 18,
+          opacity: 0.08,
+          borderColor: AppTheme.primaryCyan.withValues(alpha: 0.2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppTheme.cyanGradient,
+                boxShadow: AppTheme.neonGlow(AppTheme.primaryCyan,
+                    intensity: 0.25),
+              ),
+              child: const Icon(Icons.support_agent_rounded,
+                  color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AI Emergency Assistant',
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Get safe guidance during emergencies without leaving the app.',
+                    style: AppTheme.bodySmall.copyWith(
+                      color: AppTheme.textMuted,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: AppTheme.textMuted, size: 18),
+          ],
         ),
       ),
     );

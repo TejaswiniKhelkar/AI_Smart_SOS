@@ -18,6 +18,7 @@ import 'alert_history_screen.dart';
 import 'accident_alert_dialog.dart';
 import '../services/accident_detection_service.dart';
 import '../services/accident_motion_detector.dart';
+import '../services/foreground_sensor_bridge.dart';
 import '../services/location_tracking_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -149,7 +150,8 @@ class _HomeBody extends StatefulWidget {
   State<_HomeBody> createState() => _HomeBodyState();
 }
 
-class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
+class _HomeBodyState extends State<_HomeBody>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _sosController;
   late Animation<double> _sosPulse;
   late AnimationController _rippleController;
@@ -187,6 +189,14 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   /// the high-confidence sensor detector (true) vs the simple detector
   /// or manual test button (false). Used for targeted debug logging.
   bool _autoTriggerActive = false;
+
+  // Foreground service bridge for background sensor monitoring
+  final ForegroundSensorBridge _sensorBridge = ForegroundSensorBridge();
+
+  /// Set to `true` when a high-confidence accident is detected while
+  /// the app is in the background. The pending trigger is consumed
+  /// when the app returns to the foreground (via lifecycle callback).
+  bool _pendingAccidentTrigger = false;
 
   // Continuous location tracking
   final LocationTrackingService _locationTracker = LocationTrackingService();
@@ -251,11 +261,46 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       cancelOnError: false,
     );
     debugPrint('[SOS-AutoTrigger] Subscribed to AccidentMotionDetector eventStream.');
+
+    // Start the foreground service bridge for background sensor monitoring.
+    // The bridge injects native sensor data into the existing services when
+    // the app is backgrounded, so the full AccidentMotionDetector pipeline
+    // keeps running even with the screen locked.
+    _sensorBridge.start(
+      accelerometerService:
+          _motionDetector.impactService.accelerometerService,
+      gyroscopeService: _motionDetector.gyroscopeService,
+    );
+
+    // Register for app lifecycle changes
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // ── App lifecycle (for background accident detection) ────────────────
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _pendingAccidentTrigger) {
+      _pendingAccidentTrigger = false;
+      debugPrint('[SOS-AutoTrigger] App RESUMED with pending accident — '
+          'showing AccidentAlertDialog now.');
+      _autoTriggerActive = true;
+      // Small delay to let the UI fully settle after resume
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted && !_accidentDialogShowing) {
+          _onAccidentDetected();
+        }
+      });
+    }
   }
 
   void _onAccidentDetected() {
     if (!mounted || _accidentDialogShowing) return;
     _accidentDialogShowing = true;
+
+    // Dismiss the native accident alert notification (if it was shown
+    // to bring the app to the foreground from the background).
+    _sensorBridge.dismissAccidentAlertNotification();
 
     final wasAutoTrigger = _autoTriggerActive;
     if (wasAutoTrigger) {
@@ -333,12 +378,30 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
 
     debugPrint('[SOS-AutoTrigger] 🚨 Automatic SOS trigger REQUESTED — '
         'showing AccidentAlertDialog with 30s countdown.');
+
+    // If the app is in the background, we cannot directly show a dialog.
+    // Instead, post a high-priority notification with full-screen intent
+    // to bring the app to the foreground, and defer the dialog.
+    if (_sensorBridge.isInBackground) {
+      debugPrint('[SOS-AutoTrigger] App is BACKGROUNDED — '
+          'showing full-screen notification to wake user.');
+      _pendingAccidentTrigger = true;
+      _sensorBridge.showAccidentAlertNotification();
+      return;
+    }
+
     _autoTriggerActive = true;
     _onAccidentDetected();
   }
 
   @override
   void dispose() {
+    // Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+
+    // Stop foreground service bridge
+    _sensorBridge.stop();
+
     // Clean up high-confidence motion detector subscription & detector
     _motionEventSubscription?.cancel();
     _motionEventSubscription = null;

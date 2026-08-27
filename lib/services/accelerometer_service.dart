@@ -223,6 +223,38 @@ class AccelerometerService {
     _onReading?.call(reading);
   }
 
+  /// Injects a reading from an external source (e.g. the native Android
+  /// foreground service) into the same broadcast stream used by
+  /// `sensors_plus`. This allows background sensor data to flow through
+  /// the existing detection pipeline unchanged.
+  ///
+  /// Applies the same throttling as [_onSensorEvent].
+  void injectReading(double x, double y, double z) {
+    final now = DateTime.now();
+
+    if (emitIntervalMs > 0 &&
+        now.difference(_lastEmitTime).inMilliseconds < emitIntervalMs) {
+      return;
+    }
+    _lastEmitTime = now;
+
+    final reading = AccelerometerReading(
+      x: x,
+      y: y,
+      z: z,
+      magnitude: _magnitude(x, y, z),
+      timestamp: now,
+    );
+
+    _latestReading = reading;
+
+    if (!_readingController.isClosed) {
+      _readingController.add(reading);
+    }
+
+    _onReading?.call(reading);
+  }
+
   /// Computes the vector magnitude: sqrt(x² + y² + z²).
   static double _magnitude(double x, double y, double z) {
     return sqrt(x * x + y * y + z * z);

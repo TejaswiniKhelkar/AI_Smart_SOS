@@ -3,19 +3,27 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
+/// Callback signature for sudden-movement events.
+///
+/// [message] is a human-readable description of what was detected
+/// (e.g. "Sudden movement detected").
+typedef SuddenMovementCallback = void Function(String message);
+
 /// Phone movement detection service using accelerometer and gyroscope.
 ///
-/// Prints sensor values (x, y, z and magnitude) to the debug console
-/// at a throttled interval so the log stays readable.
-///
-/// Detects:
+/// Reads raw sensor streams from [sensors_plus] and detects:
 /// - **Sudden impacts** when acceleration magnitude exceeds [impactThreshold].
 /// - **Abnormal rotation** when gyroscope magnitude exceeds [rotationThreshold].
 ///
-/// Both detections have independent cooldowns to prevent repeated triggers.
+/// Detection state is exposed via:
+/// - [onSuddenMovement] callback (set via [startListening]).
+/// - [isMovementDetected] / [lastDetectionMessage] readable properties.
 ///
-/// Safe to call on platforms without sensors (e.g. Chrome) — the listeners
-/// will simply not fire and no crash will occur.
+/// Both detections have independent cooldowns to prevent repeated triggers.
+/// The detection flag auto-clears after [detectionDisplayDuration].
+///
+/// Safe to call on platforms without sensors (e.g. Chrome/web) — the
+/// listeners simply will not fire and no crash will occur.
 class MovementDetectionService {
   MovementDetectionService({
     this.logIntervalMs = 500,
@@ -23,6 +31,7 @@ class MovementDetectionService {
     this.impactCooldown = const Duration(seconds: 5),
     this.rotationThreshold = 10.0,
     this.rotationCooldown = const Duration(seconds: 5),
+    this.detectionDisplayDuration = const Duration(seconds: 4),
   });
 
   /// Minimum interval between debug-print outputs (in milliseconds).
@@ -38,7 +47,7 @@ class MovementDetectionService {
   /// impacts while ignoring everyday movement.
   final double impactThreshold;
 
-  /// Minimum time between consecutive impact log messages.
+  /// Minimum time between consecutive impact triggers.
   final Duration impactCooldown;
 
   // ── Gyroscope settings ───────────────────────────────────────────────────
@@ -50,8 +59,13 @@ class MovementDetectionService {
   /// drops, or violent shakes while ignoring regular use.
   final double rotationThreshold;
 
-  /// Minimum time between consecutive rotation-spike log messages.
+  /// Minimum time between consecutive rotation-spike triggers.
   final Duration rotationCooldown;
+
+  /// How long [isMovementDetected] stays `true` after a detection before
+  /// auto-clearing. Lets consumers show a transient UI message without
+  /// manual resets.
+  final Duration detectionDisplayDuration;
 
   // ── Internal state ───────────────────────────────────────────────────────
 
@@ -64,20 +78,44 @@ class MovementDetectionService {
   DateTime _lastImpactTime = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastRotationSpikeTime = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Whether the service is actively listening.
+  Timer? _clearDetectionTimer;
+
+  // ── Exposed detection state ──────────────────────────────────────────────
+
+  /// Optional callback invoked when sudden movement is detected.
+  /// Set via [startListening]. This does **not** trigger SOS or countdown —
+  /// it only notifies the consumer of the event.
+  SuddenMovementCallback? _onSuddenMovement;
+
+  bool _isMovementDetected = false;
+  String _lastDetectionMessage = '';
+
+  /// Whether the service is actively listening to sensors.
   bool get isListening => _isListening;
+
+  /// `true` for [detectionDisplayDuration] after a sudden movement is
+  /// detected, then auto-clears to `false`.
+  bool get isMovementDetected => _isMovementDetected;
+
+  /// Human-readable message from the last detection, e.g.
+  /// `"Sudden movement detected (32.5 m/s²)"`. Empty when no detection has
+  /// occurred or after the display duration has elapsed.
+  String get lastDetectionMessage => _lastDetectionMessage;
 
   // ── Public API ───────────────────────────────────────────────────────────
 
   /// Starts listening to accelerometer and gyroscope sensors.
   ///
-  /// Safe to call multiple times — duplicate listeners are prevented.
-  void startListening() {
+  /// [onSuddenMovement] is called each time a threshold is crossed (after
+  /// cooldown). Safe to call multiple times — duplicate listeners are
+  /// prevented.
+  void startListening({SuddenMovementCallback? onSuddenMovement}) {
     if (_isListening) {
       debugPrint('[MovementDetection] Already listening — ignoring start().');
       return;
     }
     _isListening = true;
+    _onSuddenMovement = onSuddenMovement;
 
     debugPrint('[MovementDetection] Starting sensor listeners...');
     debugPrint(
@@ -101,8 +139,19 @@ class MovementDetectionService {
     _gyroSubscription?.cancel();
     _accelSubscription = null;
     _gyroSubscription = null;
+    _clearDetectionTimer?.cancel();
+    _clearDetectionTimer = null;
     _isListening = false;
+    _onSuddenMovement = null;
     debugPrint('[MovementDetection] All sensor listeners stopped.');
+  }
+
+  /// Manually clears the detection state (e.g. after the user acknowledges).
+  void clearDetection() {
+    _isMovementDetected = false;
+    _lastDetectionMessage = '';
+    _clearDetectionTimer?.cancel();
+    _clearDetectionTimer = null;
   }
 
   // ── Accelerometer ────────────────────────────────────────────────────────
@@ -159,14 +208,17 @@ class MovementDetectionService {
     if (now.difference(_lastImpactTime) < impactCooldown) return;
     _lastImpactTime = now;
 
+    final message =
+        'Sudden movement detected (${magnitude.toStringAsFixed(1)} m/s²)';
+
     debugPrint(
-      '[MovementDetection] ⚠️ Possible impact detected! '
-      'mag=${magnitude.toStringAsFixed(2)} m/s² '
-      '(threshold: ${impactThreshold.toStringAsFixed(1)}) '
+      '[MovementDetection] ⚠️ $message '
       '| x=${event.x.toStringAsFixed(2)}, '
       'y=${event.y.toStringAsFixed(2)}, '
       'z=${event.z.toStringAsFixed(2)}',
     );
+
+    _setDetected(message);
   }
 
   // ── Gyroscope ────────────────────────────────────────────────────────────
@@ -223,14 +275,33 @@ class MovementDetectionService {
     if (now.difference(_lastRotationSpikeTime) < rotationCooldown) return;
     _lastRotationSpikeTime = now;
 
+    final message =
+        'Abnormal rotation detected (${magnitude.toStringAsFixed(1)} rad/s)';
+
     debugPrint(
-      '[MovementDetection] 🔄 Abnormal rotation detected! '
-      'mag=${magnitude.toStringAsFixed(2)} rad/s '
-      '(threshold: ${rotationThreshold.toStringAsFixed(1)}) '
+      '[MovementDetection] 🔄 $message '
       '| x=${event.x.toStringAsFixed(2)}, '
       'y=${event.y.toStringAsFixed(2)}, '
       'z=${event.z.toStringAsFixed(2)}',
     );
+
+    _setDetected(message);
+  }
+
+  // ── Detection state management ──────────────────────────────────────────
+
+  /// Sets the detection flag, fires the callback, and schedules auto-clear.
+  void _setDetected(String message) {
+    _isMovementDetected = true;
+    _lastDetectionMessage = message;
+
+    // Notify consumer (if registered)
+    _onSuddenMovement?.call(message);
+
+    // Auto-clear after the display duration so the flag doesn't stay
+    // forever if no one explicitly calls [clearDetection].
+    _clearDetectionTimer?.cancel();
+    _clearDetectionTimer = Timer(detectionDisplayDuration, clearDetection);
   }
 
   // ── Utilities ────────────────────────────────────────────────────────────

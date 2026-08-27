@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
@@ -16,6 +17,7 @@ import 'emergency_contacts_screen.dart';
 import 'alert_history_screen.dart';
 import 'accident_alert_dialog.dart';
 import '../services/accident_detection_service.dart';
+import '../services/accident_motion_detector.dart';
 import '../services/location_tracking_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -173,9 +175,13 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   String _placeSearchQuery = '';
   final TextEditingController _placeSearchController = TextEditingController();
 
-  // Accident detection
+  // Accident detection (simple threshold — existing)
   late final AccidentDetectionService _accidentService;
   bool _accidentDialogShowing = false;
+
+  // High-confidence accident detection (Layer 3/4 — real sensor fusion)
+  late final AccidentMotionDetector _motionDetector;
+  StreamSubscription<MotionEvent>? _motionEventSubscription;
 
   // Continuous location tracking
   final LocationTrackingService _locationTracker = LocationTrackingService();
@@ -224,11 +230,22 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     // Start continuous location tracking (updates _locationTracker.latestLocation)
     _startLocationTracking();
 
-    // Start accident detection
+    // Start accident detection (simple threshold — existing)
     _accidentService = AccidentDetectionService();
     _accidentService.startListening(
       onAccidentDetected: _onAccidentDetected,
     );
+
+    // Start high-confidence accident detection (real sensor fusion)
+    _motionDetector = AccidentMotionDetector();
+    _motionDetector.startDetection();
+    _motionEventSubscription = _motionDetector.eventStream.listen(
+      _onMotionEvent,
+      onError: (Object e) =>
+          debugPrint('[SOS-AutoTrigger] Motion event stream error: $e'),
+      cancelOnError: false,
+    );
+    debugPrint('[SOS-AutoTrigger] Subscribed to AccidentMotionDetector eventStream.');
   }
 
   void _onAccidentDetected() {
@@ -240,8 +257,43 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     });
   }
 
+  /// Handles motion events from the high-confidence [AccidentMotionDetector].
+  ///
+  /// Only [highConfidenceAccidentDetected] events trigger the SOS flow.
+  /// The existing [_accidentDialogShowing] flag prevents duplicate countdowns.
+  void _onMotionEvent(MotionEvent event) {
+    if (event.type != MotionEventType.highConfidenceAccidentDetected) return;
+
+    debugPrint('');
+    debugPrint('[SOS-AutoTrigger] ════════════════════════════════════════');
+    debugPrint('[SOS-AutoTrigger] highConfidenceAccidentDetected RECEIVED');
+    debugPrint('[SOS-AutoTrigger]   confidence=${event.confidenceScore?.toStringAsFixed(2)}');
+    debugPrint('[SOS-AutoTrigger]   message=${event.message}');
+    debugPrint('[SOS-AutoTrigger] ════════════════════════════════════════');
+    debugPrint('');
+
+    // Duplicate-trigger protection: if the countdown dialog is already
+    // showing (from any source — manual, simple detector, or this detector),
+    // do NOT start another one.
+    if (_accidentDialogShowing) {
+      debugPrint('[SOS-AutoTrigger] ⛔ Duplicate trigger PREVENTED — '
+          'accident dialog already showing.');
+      return;
+    }
+
+    debugPrint('[SOS-AutoTrigger] 🚨 Automatic SOS trigger REQUESTED — '
+        'showing AccidentAlertDialog with 30s countdown.');
+    _onAccidentDetected();
+  }
+
   @override
   void dispose() {
+    // Clean up high-confidence motion detector subscription & detector
+    _motionEventSubscription?.cancel();
+    _motionEventSubscription = null;
+    _motionDetector.dispose();
+    debugPrint('[SOS-AutoTrigger] Motion detector subscription cancelled & disposed.');
+
     _locationTracker.stopTracking();
     _accidentService.stopListening();
     _sosController.dispose();

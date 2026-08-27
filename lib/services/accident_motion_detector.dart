@@ -668,6 +668,28 @@ class AccidentMotionDetector {
         '(including high-confidence cooldown).');
   }
 
+  /// Engages the high-confidence cooldown so no new
+  /// [highConfidenceAccidentDetected] event can be emitted for
+  /// [ConfidenceAnalysisConfig.highConfidenceCooldown] seconds.
+  ///
+  /// Also clears any in-progress incident analysis and pending
+  /// impact/rotation events so stale sensor data from the same
+  /// physical incident cannot re-trigger.
+  ///
+  /// Call this after the user dismisses/cancels a sensor-triggered
+  /// SOS countdown.
+  void enforceHighConfidenceCooldown() {
+    _lastHighConfidenceTime = DateTime.now();
+    _clearRecentImpact();
+    _clearRecentRotation();
+    _resetIncident();
+    debugPrint(
+      '[AccidentMotion] High-confidence cooldown ENFORCED — '
+      'no new high-confidence event for '
+      '${confidenceConfig.highConfidenceCooldown.inSeconds}s.',
+    );
+  }
+
   // ── Recent-event management with auto-expiry ────────────────────────────
 
   /// Records a recent impact and starts an expiry timer.

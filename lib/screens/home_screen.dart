@@ -183,6 +183,11 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   late final AccidentMotionDetector _motionDetector;
   StreamSubscription<MotionEvent>? _motionEventSubscription;
 
+  /// Tracks whether the most recent AccidentAlertDialog was opened by
+  /// the high-confidence sensor detector (true) vs the simple detector
+  /// or manual test button (false). Used for targeted debug logging.
+  bool _autoTriggerActive = false;
+
   // Continuous location tracking
   final LocationTrackingService _locationTracker = LocationTrackingService();
 
@@ -251,9 +256,54 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   void _onAccidentDetected() {
     if (!mounted || _accidentDialogShowing) return;
     _accidentDialogShowing = true;
+
+    final wasAutoTrigger = _autoTriggerActive;
+    if (wasAutoTrigger) {
+      debugPrint('[SOS-AutoTrigger] AccidentAlertDialog OPENED — '
+          'source: high-confidence sensor detection. '
+          '30s countdown started.');
+    }
+
     AccidentAlertDialog.show(context, onSendSOS: _triggerSOS).then((_) {
       _accidentDialogShowing = false;
+
+      // Reset the simple detector cooldown (existing behaviour)
       _accidentService.resetCooldown();
+
+      // Enforce the high-confidence cooldown on the motion detector so
+      // the same physical incident cannot re-trigger the SOS countdown.
+      // Also clears any in-progress incident analysis and stale
+      // pending impact/rotation events.
+      _motionDetector.enforceHighConfidenceCooldown();
+
+      if (wasAutoTrigger) {
+        // Distinguish between SOS-sent vs cancelled.
+        // _sosPressed is set to true by _triggerSOS when SOS is actually sent.
+        final sosSent = _sosPressed;
+        if (sosSent) {
+          debugPrint('');
+          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
+          debugPrint('[SOS-AutoTrigger] ✅ AUTO-SOS COMPLETED SUCCESSFULLY');
+          debugPrint('[SOS-AutoTrigger]   Flow: sensor → high-confidence → '
+              '30s countdown → SOS sent');
+          debugPrint('[SOS-AutoTrigger]   Sensor state: cooldown enforced '
+              '(${_motionDetector.confidenceConfig.highConfidenceCooldown.inSeconds}s)');
+          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
+          debugPrint('');
+        } else {
+          debugPrint('');
+          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
+          debugPrint('[SOS-AutoTrigger] 🟢 AUTO-SOS CANCELLED (user is safe)');
+          debugPrint('[SOS-AutoTrigger]   User tapped "I\'m Safe" — '
+              'no SOS sent.');
+          debugPrint('[SOS-AutoTrigger]   Sensor state: cooldown enforced '
+              '(${_motionDetector.confidenceConfig.highConfidenceCooldown.inSeconds}s)');
+          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
+          debugPrint('');
+        }
+      }
+
+      _autoTriggerActive = false;
     });
   }
 
@@ -283,6 +333,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
 
     debugPrint('[SOS-AutoTrigger] 🚨 Automatic SOS trigger REQUESTED — '
         'showing AccidentAlertDialog with 30s countdown.');
+    _autoTriggerActive = true;
     _onAccidentDetected();
   }
 

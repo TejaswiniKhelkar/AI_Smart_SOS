@@ -27,9 +27,9 @@ typedef SuddenMovementCallback = void Function(String message);
 class MovementDetectionService {
   MovementDetectionService({
     this.logIntervalMs = 500,
-    this.impactThreshold = 25.0,
+    this.impactThreshold = 40.0,
     this.impactCooldown = const Duration(seconds: 5),
-    this.rotationThreshold = 10.0,
+    this.rotationThreshold = 20.0,
     this.rotationCooldown = const Duration(seconds: 5),
     this.detectionDisplayDuration = const Duration(seconds: 4),
   });
@@ -43,8 +43,9 @@ class MovementDetectionService {
   /// Acceleration magnitude (m/s²) above which a "possible impact" is logged.
   ///
   /// Gravity alone is ~9.8 m/s². Normal walking/pocket bumps peak around
-  /// 12–15 m/s². A threshold of 25 m/s² (~2.5G) catches hard drops and
-  /// impacts while ignoring everyday movement.
+  /// 12–15 m/s². A vigorous phone shake reaches 20–30 m/s². A threshold of
+  /// 40 m/s² (~4G) only catches severe impacts (crashes, collisions) while
+  /// ignoring all normal everyday movement including shaking.
   final double impactThreshold;
 
   /// Minimum time between consecutive impact triggers.
@@ -55,8 +56,9 @@ class MovementDetectionService {
   /// Gyroscope magnitude (rad/s) above which "abnormal rotation" is logged.
   ///
   /// Normal hand movements produce ~1–3 rad/s. Quickly flipping the phone
-  /// reaches ~5–8 rad/s. A threshold of 10 rad/s catches sudden tumbles,
-  /// drops, or violent shakes while ignoring regular use.
+  /// reaches ~5–8 rad/s. Vigorous shaking can reach 10–15 rad/s. A threshold
+  /// of 20 rad/s catches only violent tumbles, drops, or crash impacts
+  /// while ignoring all normal phone handling.
   final double rotationThreshold;
 
   /// Minimum time between consecutive rotation-spike triggers.
@@ -202,7 +204,19 @@ class MovementDetectionService {
   }
 
   void _checkForImpact(double magnitude, AccelerometerEvent event) {
-    if (magnitude < impactThreshold) return;
+    if (magnitude < impactThreshold) {
+      // Log notable-but-below-threshold readings for debugging.
+      // Only readings above 15 m/s² (~1.5G) are logged to avoid
+      // flooding with normal gravity-level noise.
+      if (magnitude > 15.0) {
+        debugPrint(
+          '[MovementDetection] 🔽 Impact IGNORED — below threshold: '
+          'mag=${magnitude.toStringAsFixed(2)} m/s² '
+          '(threshold: ${impactThreshold.toStringAsFixed(1)} m/s²)',
+        );
+      }
+      return;
+    }
 
     final now = DateTime.now();
     if (now.difference(_lastImpactTime) < impactCooldown) return;
@@ -269,7 +283,19 @@ class MovementDetectionService {
   }
 
   void _checkForRotationSpike(double magnitude, GyroscopeEvent event) {
-    if (magnitude < rotationThreshold) return;
+    if (magnitude < rotationThreshold) {
+      // Log notable-but-below-threshold readings for debugging.
+      // Only readings above 5 rad/s (beyond normal hand movement) are
+      // logged to avoid flooding with idle noise.
+      if (magnitude > 5.0) {
+        debugPrint(
+          '[MovementDetection] 🔽 Rotation IGNORED — below threshold: '
+          'mag=${magnitude.toStringAsFixed(2)} rad/s '
+          '(threshold: ${rotationThreshold.toStringAsFixed(1)} rad/s)',
+        );
+      }
+      return;
+    }
 
     final now = DateTime.now();
     if (now.difference(_lastRotationSpikeTime) < rotationCooldown) return;

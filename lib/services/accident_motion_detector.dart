@@ -347,8 +347,8 @@ class AccidentMotionDetector {
   AccidentMotionDetector({
     ImpactDetectionService? impactService,
     GyroscopeService? gyroscopeService,
-    this.impactThreshold = 20.0,
-    this.rotationThreshold = 8.0,
+    this.impactThreshold = 40.0,
+    this.rotationThreshold = 20.0,
     this.combinationWindow = const Duration(seconds: 2),
     this.rotationCooldown = const Duration(seconds: 3),
     this.accidentCooldown = const Duration(seconds: 10),
@@ -422,6 +422,7 @@ class AccidentMotionDetector {
   int _filteredRotations = 0;
   int _expiredImpacts = 0;
   int _expiredRotations = 0;
+  int _suppressedDuringCooldown = 0;
 
   final StreamController<MotionEvent> _eventController =
       StreamController<MotionEvent>.broadcast();
@@ -494,6 +495,11 @@ class AccidentMotionDetector {
   /// How many incidents were analyzed and rejected (insufficient evidence).
   int get totalRejectedIncidents => _totalRejectedIncidents;
 
+  /// How many sensor events were suppressed because the high-confidence
+  /// cooldown was active (preventing duplicate triggers from the same
+  /// physical incident).
+  int get suppressedDuringCooldown => _suppressedDuringCooldown;
+
   Stream<MotionEvent> get eventStream => _eventController.stream;
   ImpactDetectionService get impactService => _impactService;
   GyroscopeService get gyroscopeService => _gyroscopeService;
@@ -518,6 +524,7 @@ class AccidentMotionDetector {
     _expiredRotations = 0;
     _totalHighConfidence = 0;
     _totalRejectedIncidents = 0;
+    _suppressedDuringCooldown = 0;
     _lastHighConfidenceTime = DateTime.fromMillisecondsSinceEpoch(0);
     _clearRecentImpact();
     _clearRecentRotation();
@@ -642,7 +649,8 @@ class AccidentMotionDetector {
       'Filtered impacts: $_filteredImpacts, '
       'Filtered rotations: $_filteredRotations, '
       'Expired impacts: $_expiredImpacts, '
-      'Expired rotations: $_expiredRotations.',
+      'Expired rotations: $_expiredRotations, '
+      'Suppressed (cooldown): $_suppressedDuringCooldown.',
     );
   }
 
@@ -679,15 +687,33 @@ class AccidentMotionDetector {
   /// Call this after the user dismisses/cancels a sensor-triggered
   /// SOS countdown.
   void enforceHighConfidenceCooldown() {
-    _lastHighConfidenceTime = DateTime.now();
+    final now = DateTime.now();
+    _lastHighConfidenceTime = now;
+    // Also engage rotation and accident cooldowns so individual sensor
+    // events from the same physical incident are suppressed immediately.
+    _lastRotationTime = now;
+    _lastAccidentTime = now;
     _clearRecentImpact();
     _clearRecentRotation();
     _resetIncident();
+    // Reset the underlying impact service cooldown to suppress residual
+    // accelerometer spikes from the same physical event.
+    _impactService.resetCooldown();
     debugPrint(
       '[AccidentMotion] High-confidence cooldown ENFORCED — '
-      'no new high-confidence event for '
-      '${confidenceConfig.highConfidenceCooldown.inSeconds}s.',
+      'no new events for '
+      '${confidenceConfig.highConfidenceCooldown.inSeconds}s. '
+      'All sub-cooldowns synchronized.',
     );
+  }
+
+  /// Returns `true` if the high-confidence cooldown is currently active,
+  /// meaning a recent accident was already detected and we should not
+  /// process new sensor events as potential incidents.
+  bool get _isHighConfidenceCooldownActive {
+    final now = DateTime.now();
+    return now.difference(_lastHighConfidenceTime) <
+        confidenceConfig.highConfidenceCooldown;
   }
 
   // ── Recent-event management with auto-expiry ────────────────────────────
@@ -1107,6 +1133,13 @@ class AccidentMotionDetector {
     _lastHighConfidenceTime = now;
     _totalHighConfidence++;
 
+    // Engage all sub-cooldowns to prevent duplicate events from the
+    // same physical incident. This ensures that residual sensor spikes
+    // (common after a crash) don't start a new incident window.
+    _lastRotationTime = now;
+    _lastAccidentTime = now;
+    _impactService.resetCooldown();
+
     debugPrint(
         '║  Decision       : 🚨 HIGH-CONFIDENCE ACCIDENT');
     debugPrint(
@@ -1114,7 +1147,7 @@ class AccidentMotionDetector {
     debugPrint('║  Total emitted  : $_totalHighConfidence');
     debugPrint('║  Cooldown       : '
         '${confidenceConfig.highConfidenceCooldown.inSeconds}s '
-        'until next');
+        'until next (all sub-cooldowns synchronized)');
     debugPrint('║  ✅ SOS auto-trigger CONNECTED via eventStream');
     debugPrint(
         '╚══════════════════════════════════════════════════════════╝');
@@ -1134,7 +1167,11 @@ class AccidentMotionDetector {
     );
     _emit(motionEvent);
 
+    // Reset incident state and clear any pending events so residual
+    // sensor data cannot re-trigger.
     _resetIncident();
+    _clearRecentImpact();
+    _clearRecentRotation();
   }
 
   /// Computes the running score from all collected evidence.
@@ -1225,6 +1262,21 @@ class AccidentMotionDetector {
   // ── Impact handling (from ImpactDetectionService) ───────────────────────
 
   void _onImpactDetected(ImpactEvent event) {
+    // ── High-confidence cooldown guard ──────────────────────────────────
+    // If a high-confidence accident was recently detected, suppress all
+    // new impact events to prevent duplicate triggers from the same
+    // physical incident. Sensor monitoring stays active for buffer data.
+    if (_isHighConfidenceCooldownActive) {
+      _suppressedDuringCooldown++;
+      debugPrint(
+        '[AccidentMotion] ⏳ Impact SUPPRESSED — high-confidence cooldown '
+        'active (${confidenceConfig.highConfidenceCooldown.inSeconds}s). '
+        'mag=${event.magnitude.toStringAsFixed(1)} m/s² '
+        '(#$_suppressedDuringCooldown suppressed total)',
+      );
+      return;
+    }
+
     // ── Run false-positive filter ───────────────────────────────────────
     final filterReason = _filterImpact(event);
     if (filterReason != null) {
@@ -1307,7 +1359,36 @@ class AccidentMotionDetector {
     }
 
     // ── Threshold check ─────────────────────────────────────────────────
-    if (reading.magnitude < rotationThreshold) return;
+    if (reading.magnitude < rotationThreshold) {
+      // Log notable-but-below-threshold readings for debugging.
+      // Only log magnitudes above 5.0 rad/s (beyond normal hand movement)
+      // to avoid flooding the console with idle/walking noise.
+      if (reading.magnitude > 5.0) {
+        debugPrint(
+          '[AccidentMotion] 🔽 Rotation IGNORED — below threshold: '
+          'mag=${reading.magnitude.toStringAsFixed(2)} rad/s '
+          '(threshold: ${rotationThreshold.toStringAsFixed(1)} rad/s) '
+          '| x=${reading.x.toStringAsFixed(2)}, '
+          'y=${reading.y.toStringAsFixed(2)}, '
+          'z=${reading.z.toStringAsFixed(2)}',
+        );
+      }
+      return;
+    }
+
+    // ── High-confidence cooldown guard ──────────────────────────────────
+    // Suppress rotation events during cooldown to prevent duplicate
+    // triggers from the same physical incident.
+    if (_isHighConfidenceCooldownActive) {
+      _suppressedDuringCooldown++;
+      debugPrint(
+        '[AccidentMotion] ⏳ Rotation SUPPRESSED — high-confidence cooldown '
+        'active (${confidenceConfig.highConfidenceCooldown.inSeconds}s). '
+        'mag=${reading.magnitude.toStringAsFixed(1)} rad/s '
+        '(#$_suppressedDuringCooldown suppressed total)',
+      );
+      return;
+    }
 
     // ── Cooldown check ──────────────────────────────────────────────────
     if (now.difference(_lastRotationTime) < rotationCooldown) {

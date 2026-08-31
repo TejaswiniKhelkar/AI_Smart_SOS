@@ -53,7 +53,7 @@ typedef ImpactDetectedCallback = void Function(ImpactEvent event);
 ///    - [lastImpact] getter — the most recent impact snapshot.
 ///
 /// ## Threshold guidance
-///
+/// 
 /// | Magnitude (m/s²) | What it means                     |
 /// |-------------------|-----------------------------------|
 /// | ~9.8              | Phone at rest (gravity only)      |
@@ -62,9 +62,9 @@ typedef ImpactDetectedCallback = void Function(ImpactEvent event);
 /// | 25–40             | Hard drop, strong jerk            |
 /// | 40+               | Severe impact, potential crash    |
 ///
-/// Default threshold is **20.0 m/s²** (~2G), low enough to test by giving
-/// the phone a firm shake, while high enough to ignore normal usage. For
-/// production accident detection, raise to 30–40 m/s².
+/// Default threshold is **40.0 m/s²** (~4G), high enough to ignore normal
+/// phone shaking, hand movement, and drops while still catching severe
+/// impacts indicative of a real crash or accident.
 ///
 /// ## Cooldown
 ///
@@ -88,7 +88,7 @@ typedef ImpactDetectedCallback = void Function(ImpactEvent event);
 class ImpactDetectionService {
   ImpactDetectionService({
     AccelerometerService? accelerometerService,
-    this.impactThreshold = 20.0,
+    this.impactThreshold = 40.0,
     this.cooldownDuration = const Duration(seconds: 3),
     this.debugLogIntervalMs = 1000,
   }) : _accelerometerService = accelerometerService ?? AccelerometerService(
@@ -103,8 +103,9 @@ class ImpactDetectionService {
 
   /// Acceleration magnitude (m/s²) above which a sudden impact is detected.
   ///
-  /// Default 20.0 m/s² (~2G) — easily testable with a firm shake.
-  /// Raise to 30–40 for production accident detection.
+  /// Default 40.0 m/s² (~4G) — high enough to ignore normal phone shaking
+  /// and everyday movement. Only severe impacts (crashes, collisions) exceed
+  /// this threshold.
   final double impactThreshold;
 
   /// Minimum time between consecutive impact events. Prevents a single
@@ -251,7 +252,22 @@ class ImpactDetectionService {
     }
 
     // ── Threshold check ─────────────────────────────────────────────────
-    if (reading.magnitude < impactThreshold) return;
+    if (reading.magnitude < impactThreshold) {
+      // Log notable-but-below-threshold readings for debugging.
+      // Only log magnitudes above 15 m/s² (~1.5G) to avoid flooding the
+      // console with normal gravity-level noise.
+      if (reading.magnitude > 15.0) {
+        debugPrint(
+          '[ImpactDetection] 🔽 Movement IGNORED — below impact threshold: '
+          'mag=${reading.magnitude.toStringAsFixed(2)} m/s² '
+          '(threshold: ${impactThreshold.toStringAsFixed(1)} m/s²) '
+          '| x=${reading.x.toStringAsFixed(2)}, '
+          'y=${reading.y.toStringAsFixed(2)}, '
+          'z=${reading.z.toStringAsFixed(2)}',
+        );
+      }
+      return;
+    }
 
     // ── Cooldown check ──────────────────────────────────────────────────
     if (now.difference(_lastImpactTime) < cooldownDuration) {

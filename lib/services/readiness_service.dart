@@ -27,7 +27,12 @@ class ReadinessService {
 
     bool locationEnabled = false;
     try {
-      locationEnabled = await Geolocator.isLocationServiceEnabled();
+      // Use permission status as the readiness indicator instead of
+      // Geolocator.isLocationServiceEnabled() which is unreliable on
+      // many Android devices (returns false even when GPS is ON).
+      final permission = await Geolocator.checkPermission();
+      locationEnabled = permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always;
     } catch (_) {}
 
     final items = <ReadinessItem>[

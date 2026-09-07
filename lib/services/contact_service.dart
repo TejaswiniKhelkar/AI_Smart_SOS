@@ -1,22 +1,35 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/emergency_contact.dart';
 
-/// Manages emergency contacts stored locally via SharedPreferences.
+/// Manages emergency contacts stored securely in Firebase Firestore.
 ///
-/// No hard-coded contact limit — allows unlimited contacts.
+/// Ensures data isolation per authenticated user.
 class ContactService {
-  static const String _storageKey = 'emergency_contacts';
+  static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+  static DocumentReference? get _userDoc => _uid != null 
+      ? FirebaseFirestore.instance.collection('users').doc(_uid)
+      : null;
 
-  /// Retrieves all saved emergency contacts.
+  /// Retrieves all saved emergency contacts from Firestore.
   static Future<List<EmergencyContact>> getContacts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final encoded = prefs.getString(_storageKey);
-    if (encoded == null || encoded.isEmpty) return [];
-    return EmergencyContact.decode(encoded);
+    if (_userDoc == null) return [];
+    
+    final doc = await _userDoc!.get();
+    if (!doc.exists) return [];
+
+    final data = doc.data() as Map<String, dynamic>?;
+    if (data == null || !data.containsKey('emergencyContacts')) return [];
+
+    final List<dynamic> contactsData = data['emergencyContacts'];
+    return contactsData
+        .map((e) => EmergencyContact.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   /// Adds a new emergency contact.
   static Future<bool> addContact(EmergencyContact contact) async {
+    if (_userDoc == null) return false;
     final contacts = await getContacts();
     contacts.add(contact);
     await _save(contacts);
@@ -25,6 +38,7 @@ class ContactService {
 
   /// Updates an existing contact by ID.
   static Future<void> updateContact(EmergencyContact updated) async {
+    if (_userDoc == null) return;
     final contacts = await getContacts();
     final index = contacts.indexWhere((c) => c.id == updated.id);
     if (index != -1) {
@@ -35,6 +49,7 @@ class ContactService {
 
   /// Deletes a contact by ID.
   static Future<void> deleteContact(String id) async {
+    if (_userDoc == null) return;
     final contacts = await getContacts();
     contacts.removeWhere((c) => c.id == id);
     await _save(contacts);
@@ -85,7 +100,8 @@ class ContactService {
   }
 
   static Future<void> _save(List<EmergencyContact> contacts) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, EmergencyContact.encode(contacts));
+    if (_userDoc == null) return;
+    final contactsJson = contacts.map((c) => c.toJson()).toList();
+    await _userDoc!.set({'emergencyContacts': contactsJson}, SetOptions(merge: true));
   }
 }

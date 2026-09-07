@@ -112,22 +112,19 @@ class LocationTrackingService {
     debugPrint('[LocationTracking] Tracking stopped.');
   }
 
-  // ── Permission handling ──────────────────────────────────────────────────
-
-  /// Ensures location services are enabled and permission is granted.
-  /// Requests permission if needed; throws [LocationException] on failure.
+  /// Ensures location permission is granted.
+  ///
+  /// Does NOT call [Geolocator.isLocationServiceEnabled] because that API
+  /// is unreliable on many Android devices — it returns `false` even when
+  /// GPS is enabled and permission is granted. Instead, we let the position
+  /// stream surface any real service-disabled errors via [_onPositionError].
   Future<void> _ensurePermissions() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      debugPrint('[LocationTracking] Location services disabled.');
-      throw LocationException('Location services are disabled.');
-    }
-
     var permission = await Geolocator.checkPermission();
     debugPrint('[LocationTracking] Current permission: $permission');
 
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
+      debugPrint('[LocationTracking] After request: $permission');
       if (permission == LocationPermission.denied) {
         debugPrint('[LocationTracking] Permission denied by user.');
         throw LocationException('Location permission denied.');
@@ -136,9 +133,9 @@ class LocationTrackingService {
 
     if (permission == LocationPermission.deniedForever) {
       debugPrint('[LocationTracking] Permission permanently denied.');
-      throw LocationException(
-        'Location permissions are permanently denied. '
-        'Please enable them in Settings.',
+      throw SosLocationPermissionException(
+        'Location permission is permanently denied. '
+        'Please open Settings → App Permissions and enable Location.',
       );
     }
 

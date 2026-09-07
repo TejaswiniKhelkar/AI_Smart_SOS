@@ -2,6 +2,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import 'login_screen.dart';
+import 'home_screen.dart';
+import 'verify_email_screen.dart';
+import '../services/auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -124,12 +127,25 @@ class _SplashScreenState extends State<SplashScreen>
     });
 
     // Navigate after 4s
-    Future.delayed(const Duration(seconds: 4), () {
+    Future.delayed(const Duration(seconds: 4), () async {
+      if (!mounted) return;
+      
+      final bool isLoggedIn = await AuthService.isLoggedIn();
+      bool isVerified = false;
+      if (isLoggedIn) {
+        isVerified = await AuthService.isEmailVerified();
+      }
+      
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, _, _) => const LoginScreen(),
+          pageBuilder: (_, _, _) {
+            if (isLoggedIn) {
+              return isVerified ? const HomeScreen() : const VerifyEmailScreen();
+            }
+            return const LoginScreen();
+          },
           transitionsBuilder: (_, animation, _, child) {
             return FadeTransition(opacity: animation, child: child);
           },

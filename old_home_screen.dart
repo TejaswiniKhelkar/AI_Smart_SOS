@@ -1,28 +1,20 @@
-import 'dart:async';
-import 'package:geolocator/geolocator.dart';
-import 'dart:math';
+﻿import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
-import '../services/auth_service.dart';
-import 'login_screen.dart';
 import '../models/sos_alert.dart';
 import '../models/nearby_place.dart';
 import '../services/location_service.dart';
 import '../services/alert_service.dart';
 import '../services/contact_service.dart';
 import '../services/nearby_places_service.dart';
-import 'ai_emergency_dashboard_screen.dart';
 import 'emergency_contacts_screen.dart';
 import 'alert_history_screen.dart';
 import 'accident_alert_dialog.dart';
 import '../services/accident_detection_service.dart';
-import '../services/accident_motion_detector.dart';
-import '../services/foreground_sensor_bridge.dart';
-import '../services/location_tracking_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -141,10 +133,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// HOME BODY — The original home screen content, unchanged visually,
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+// HOME BODY ΓÇö The original home screen content, unchanged visually,
 // but with real SOS logic wired in.
-// ═══════════════════════════════════════════════════════════════════════════
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
 class _HomeBody extends StatefulWidget {
   const _HomeBody();
@@ -153,8 +145,7 @@ class _HomeBody extends StatefulWidget {
   State<_HomeBody> createState() => _HomeBodyState();
 }
 
-class _HomeBodyState extends State<_HomeBody>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   late AnimationController _sosController;
   late Animation<double> _sosPulse;
   late AnimationController _rippleController;
@@ -180,48 +171,13 @@ class _HomeBodyState extends State<_HomeBody>
   String _placeSearchQuery = '';
   final TextEditingController _placeSearchController = TextEditingController();
 
-  // Accident detection (simple threshold — existing)
+  // Accident detection
   late final AccidentDetectionService _accidentService;
   bool _accidentDialogShowing = false;
-
-  // High-confidence accident detection (Layer 3/4 — real sensor fusion)
-  late final AccidentMotionDetector _motionDetector;
-  StreamSubscription<MotionEvent>? _motionEventSubscription;
-
-  /// Tracks whether the most recent AccidentAlertDialog was opened by
-  /// the high-confidence sensor detector (true) vs the simple detector
-  /// or manual test button (false). Used for targeted debug logging.
-  bool _autoTriggerActive = false;
-
-  // Foreground service bridge for background sensor monitoring
-  final ForegroundSensorBridge _sensorBridge = ForegroundSensorBridge();
-
-  /// Set to `true` when a high-confidence accident is detected while
-  /// the app is in the background. The pending trigger is consumed
-  /// when the app returns to the foreground (via lifecycle callback).
-  bool _pendingAccidentTrigger = false;
-
-  // Continuous location tracking
-  final LocationTrackingService _locationTracker = LocationTrackingService();
-
-  late final MapOptions _mapOptions;
 
   @override
   void initState() {
     super.initState();
-
-    _mapOptions = MapOptions(
-      initialCenter: const LatLng(20.5937, 78.9629),
-      initialZoom: 4.0,
-      interactionOptions: const InteractionOptions(
-        flags: InteractiveFlag.all,
-      ),
-      onTap: (_, _) {
-        if (_selectedPlace != null) {
-          setState(() => _selectedPlace = null);
-        }
-      },
-    );
 
     // SOS button pulse
     _sosController = AnimationController(
@@ -260,173 +216,24 @@ class _HomeBodyState extends State<_HomeBody>
     // Fetch initial location
     _fetchLocation();
 
-    // Start continuous location tracking (updates _locationTracker.latestLocation)
-    _startLocationTracking();
-
-    // Start accident detection (simple threshold — existing)
+    // Start accident detection
     _accidentService = AccidentDetectionService();
     _accidentService.startListening(
       onAccidentDetected: _onAccidentDetected,
     );
-
-    // Start high-confidence accident detection (real sensor fusion)
-    _motionDetector = AccidentMotionDetector();
-    _motionDetector.startDetection();
-    _motionEventSubscription = _motionDetector.eventStream.listen(
-      _onMotionEvent,
-      onError: (Object e) =>
-          debugPrint('[SOS-AutoTrigger] Motion event stream error: $e'),
-      cancelOnError: false,
-    );
-    debugPrint('[SOS-AutoTrigger] Subscribed to AccidentMotionDetector eventStream.');
-
-    // Start the foreground service bridge for background sensor monitoring.
-    // The bridge injects native sensor data into the existing services when
-    // the app is backgrounded, so the full AccidentMotionDetector pipeline
-    // keeps running even with the screen locked.
-    _sensorBridge.start(
-      accelerometerService:
-          _motionDetector.impactService.accelerometerService,
-      gyroscopeService: _motionDetector.gyroscopeService,
-    );
-
-    // Register for app lifecycle changes
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  // ── App lifecycle (for background accident detection) ────────────────
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _pendingAccidentTrigger) {
-      _pendingAccidentTrigger = false;
-      debugPrint('[SOS-AutoTrigger] App RESUMED with pending accident — '
-          'showing AccidentAlertDialog now.');
-      _autoTriggerActive = true;
-      // Small delay to let the UI fully settle after resume
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted && !_accidentDialogShowing) {
-          _onAccidentDetected();
-        }
-      });
-    }
   }
 
   void _onAccidentDetected() {
     if (!mounted || _accidentDialogShowing) return;
     _accidentDialogShowing = true;
-
-    // Dismiss the native accident alert notification (if it was shown
-    // to bring the app to the foreground from the background).
-    _sensorBridge.dismissAccidentAlertNotification();
-
-    final wasAutoTrigger = _autoTriggerActive;
-    if (wasAutoTrigger) {
-      debugPrint('[SOS-AutoTrigger] AccidentAlertDialog OPENED — '
-          'source: high-confidence sensor detection. '
-          '30s countdown started.');
-    }
-
     AccidentAlertDialog.show(context, onSendSOS: _triggerSOS).then((_) {
       _accidentDialogShowing = false;
-
-      // Reset the simple detector cooldown (existing behaviour)
       _accidentService.resetCooldown();
-
-      // Enforce the high-confidence cooldown on the motion detector so
-      // the same physical incident cannot re-trigger the SOS countdown.
-      // Also clears any in-progress incident analysis and stale
-      // pending impact/rotation events.
-      _motionDetector.enforceHighConfidenceCooldown();
-
-      if (wasAutoTrigger) {
-        // Distinguish between SOS-sent vs cancelled.
-        // _sosPressed is set to true by _triggerSOS when SOS is actually sent.
-        final sosSent = _sosPressed;
-        if (sosSent) {
-          debugPrint('');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('[SOS-AutoTrigger] ✅ AUTO-SOS COMPLETED SUCCESSFULLY');
-          debugPrint('[SOS-AutoTrigger]   Flow: sensor → high-confidence → '
-              '30s countdown → SOS sent');
-          debugPrint('[SOS-AutoTrigger]   Sensor state: cooldown enforced '
-              '(${_motionDetector.confidenceConfig.highConfidenceCooldown.inSeconds}s)');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('');
-        } else {
-          debugPrint('');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('[SOS-AutoTrigger] 🟢 AUTO-SOS CANCELLED (user is safe)');
-          debugPrint('[SOS-AutoTrigger]   User tapped "I\'m Safe" — '
-              'no SOS sent.');
-          debugPrint('[SOS-AutoTrigger]   Sensor state: cooldown enforced '
-              '(${_motionDetector.confidenceConfig.highConfidenceCooldown.inSeconds}s)');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('');
-        }
-      }
-
-      _autoTriggerActive = false;
     });
-  }
-
-  /// Handles motion events from the high-confidence [AccidentMotionDetector].
-  ///
-  /// Only [highConfidenceAccidentDetected] events trigger the SOS flow.
-  /// The existing [_accidentDialogShowing] flag prevents duplicate countdowns.
-  void _onMotionEvent(MotionEvent event) {
-    if (event.type != MotionEventType.highConfidenceAccidentDetected) return;
-
-    debugPrint('');
-    debugPrint('[SOS-AutoTrigger] ════════════════════════════════════════');
-    debugPrint('[SOS-AutoTrigger] highConfidenceAccidentDetected RECEIVED');
-    debugPrint('[SOS-AutoTrigger]   confidence=${event.confidenceScore?.toStringAsFixed(2)}');
-    debugPrint('[SOS-AutoTrigger]   message=${event.message}');
-    debugPrint('[SOS-AutoTrigger] ════════════════════════════════════════');
-    debugPrint('');
-
-    // Duplicate-trigger protection: if the countdown dialog is already
-    // showing (from any source — manual, simple detector, or this detector),
-    // do NOT start another one.
-    if (_accidentDialogShowing) {
-      debugPrint('[SOS-AutoTrigger] ⛔ Duplicate trigger PREVENTED — '
-          'accident dialog already showing.');
-      return;
-    }
-
-    debugPrint('[SOS-AutoTrigger] 🚨 Automatic SOS trigger REQUESTED — '
-        'showing AccidentAlertDialog with 30s countdown.');
-
-    // If the app is in the background, we cannot directly show a dialog.
-    // Instead, post a high-priority notification with full-screen intent
-    // to bring the app to the foreground, and defer the dialog.
-    if (_sensorBridge.isInBackground) {
-      debugPrint('[SOS-AutoTrigger] App is BACKGROUNDED — '
-          'showing full-screen notification to wake user.');
-      _pendingAccidentTrigger = true;
-      _sensorBridge.showAccidentAlertNotification();
-      return;
-    }
-
-    _autoTriggerActive = true;
-    _onAccidentDetected();
   }
 
   @override
   void dispose() {
-    // Remove lifecycle observer
-    WidgetsBinding.instance.removeObserver(this);
-
-    // Stop foreground service bridge
-    _sensorBridge.stop();
-
-    // Clean up high-confidence motion detector subscription & detector
-    _motionEventSubscription?.cancel();
-    _motionEventSubscription = null;
-    _motionDetector.dispose();
-    debugPrint('[SOS-AutoTrigger] Motion detector subscription cancelled & disposed.');
-
-    _locationTracker.stopTracking();
     _accidentService.stopListening();
     _sosController.dispose();
     _rippleController.dispose();
@@ -442,7 +249,7 @@ class _HomeBodyState extends State<_HomeBody>
       if (mounted) {
         setState(() {
           _gpsCoords =
-              '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
+              '${data.latitude.toStringAsFixed(4)}┬░, ${data.longitude.toStringAsFixed(4)}┬░';
           _locationText = 'Live location active';
           _currentLat = data.latitude;
           _currentLng = data.longitude;
@@ -461,28 +268,6 @@ class _HomeBodyState extends State<_HomeBody>
         // Fetch nearby emergency places
         _fetchNearbyPlaces(data.latitude, data.longitude);
       }
-    } on SosLocationPermissionException catch (e) {
-      if (mounted) {
-        setState(() {
-          _gpsCoords = 'Permission denied';
-          _locationText = 'Location permission required';
-        });
-        _showLocationSettingsSnackbar(
-          e.message,
-          isPermission: true,
-        );
-      }
-    } on SosLocationServiceException catch (e) {
-      if (mounted) {
-        setState(() {
-          _gpsCoords = 'GPS Off';
-          _locationText = 'Enable GPS in device settings';
-        });
-        _showLocationSettingsSnackbar(
-          e.message,
-          isPermission: false,
-        );
-      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -490,60 +275,6 @@ class _HomeBodyState extends State<_HomeBody>
           _locationText = e.toString();
         });
       }
-    }
-  }
-
-  /// Starts continuous background location tracking via [LocationTrackingService].
-  ///
-  /// Each new position update refreshes the on-screen coordinates, map camera,
-  /// and keeps [_locationTracker.latestLocation] available for the SOS workflow.
-  /// Permission/GPS errors are caught once and shown via snackbar — no repeated
-  /// popups because the service itself guards against duplicate streams.
-  Future<void> _startLocationTracking() async {
-    try {
-      await _locationTracker.startTracking(
-        onUpdate: (locationData) {
-          if (!mounted) return;
-          setState(() {
-            _currentLat = locationData.latitude;
-            _currentLng = locationData.longitude;
-            _gpsCoords =
-                '${locationData.latitude.toStringAsFixed(4)}°, '
-                '${locationData.longitude.toStringAsFixed(4)}°';
-            _locationText = 'Live location active';
-          });
-
-          // Keep map camera centred on the latest position
-          try {
-            _mapController.move(
-              LatLng(locationData.latitude, locationData.longitude),
-              _mapController.camera.zoom, // preserve current zoom
-            );
-          } catch (_) {
-            // MapController may not be ready on first frames
-          }
-        },
-      );
-    } on SosLocationPermissionException catch (e) {
-      if (mounted) {
-        setState(() => _locationText = 'Location permission required');
-        _showLocationSettingsSnackbar(e.message, isPermission: true);
-      }
-    } on SosLocationServiceException catch (e) {
-      if (mounted) {
-        setState(() => _locationText = 'Enable GPS in device settings');
-        _showLocationSettingsSnackbar(e.message, isPermission: false);
-      }
-    } on LocationException catch (e) {
-      if (mounted) {
-        _showErrorSnackbar(e.message);
-        setState(() {
-          _locationText = e.message;
-        });
-      }
-    } catch (e) {
-      // Silently log non-critical errors (e.g. web/unsupported platform)
-      debugPrint('[LocationTracking] Could not start tracking: $e');
     }
   }
 
@@ -621,7 +352,7 @@ class _HomeBodyState extends State<_HomeBody>
       // Update location display
       setState(() {
         _gpsCoords =
-            '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
+            '${data.latitude.toStringAsFixed(4)}┬░, ${data.longitude.toStringAsFixed(4)}┬░';
         _locationText = 'Live location active';
       });
 
@@ -662,15 +393,15 @@ class _HomeBodyState extends State<_HomeBody>
 
       setState(() {
         _gpsCoords =
-            '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
+            '${data.latitude.toStringAsFixed(4)}┬░, ${data.longitude.toStringAsFixed(4)}┬░';
       });
 
       if (mounted) {
-        final message = '🚨 $type EMERGENCY!\n\n'
+        final message = '≡ƒÜ¿ $type EMERGENCY!\n\n'
             'I need immediate $type assistance!\n\n'
-            '📍 My live location:\n${data.googleMapsLink}\n\n'
+            '≡ƒôì My live location:\n${data.googleMapsLink}\n\n'
             'Coordinates: ${data.latitude.toStringAsFixed(6)}, ${data.longitude.toStringAsFixed(6)}\n\n'
-            '⏰ Time: ${DateTime.now().toString().substring(0, 19)}\n\n'
+            'ΓÅ░ Time: ${DateTime.now().toString().substring(0, 19)}\n\n'
             'Sent via AI Smart SOS';
 
         await Share.share(message);
@@ -818,11 +549,11 @@ class _HomeBodyState extends State<_HomeBody>
                 child: MaterialButton(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    final message = '🆘 EMERGENCY SOS!\n\n'
+                    final message = '≡ƒåÿ EMERGENCY SOS!\n\n'
                         'I need help urgently!\n\n'
-                        '📍 My live location:\n${data.googleMapsLink}\n\n'
+                        '≡ƒôì My live location:\n${data.googleMapsLink}\n\n'
                         'Coordinates: ${data.latitude.toStringAsFixed(6)}, ${data.longitude.toStringAsFixed(6)}\n\n'
-                        '⏰ Time: ${DateTime.now().toString().substring(0, 19)}\n\n'
+                        'ΓÅ░ Time: ${DateTime.now().toString().substring(0, 19)}\n\n'
                         'Sent via AI Smart SOS';
 
                     await Share.share(message);
@@ -874,46 +605,6 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  /// Shows a snackbar with an action button that opens the appropriate
-  /// settings screen (app permissions or device location toggle) and
-  /// retries location fetch when the user returns.
-  void _showLocationSettingsSnackbar(
-    String message, {
-    required bool isPermission,
-  }) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: AppTheme.bodyMedium.copyWith(color: Colors.white),
-        ),
-        backgroundColor: AppTheme.emergencyRed,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        action: SnackBarAction(
-          label: 'OPEN SETTINGS',
-          textColor: Colors.white,
-          onPressed: () async {
-            if (isPermission) {
-              await Geolocator.openAppSettings();
-            } else {
-              await Geolocator.openLocationSettings();
-            }
-            // Retry after the user returns from settings
-            await Future.delayed(const Duration(seconds: 1));
-            if (mounted) {
-              _fetchLocation();
-              _locationTracker.stopTracking();
-              _startLocationTracking();
-            }
-          },
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -957,7 +648,7 @@ class _HomeBodyState extends State<_HomeBody>
             ),
           ),
 
-          // ── Temporary Test Emergency Button (for testing popup) ──
+          // ΓöÇΓöÇ Temporary Test Emergency Button (for testing popup) ΓöÇΓöÇ
           Positioned(
             bottom: 16,
             right: 16,
@@ -968,7 +659,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Temporary Test Emergency Button ────────────────────────────────────
+  // ΓöÇΓöÇ Temporary Test Emergency Button ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildTestEmergencyButton() {
     return GestureDetector(
       onTap: () {
@@ -1021,7 +712,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Top Bar ─────────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Top Bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -1054,64 +745,28 @@ class _HomeBodyState extends State<_HomeBody>
             ],
           ),
           const Spacer(),
-          // Profile avatar / Settings
-          PopupMenuButton<String>(
-            offset: const Offset(0, 50),
-            color: AppTheme.surfaceLight,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            onSelected: (value) async {
-              if (value == 'logout') {
-                await AuthService.logout();
-                if (!context.mounted) return;
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  PageRouteBuilder(
-                    pageBuilder: (_, _, _) => const LoginScreen(),
-                    transitionsBuilder: (_, anim, _, child) =>
-                        FadeTransition(opacity: anim, child: child),
-                    transitionDuration: const Duration(milliseconds: 600),
-                  ),
-                  (route) => false,
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    const Icon(Icons.logout, color: AppTheme.emergencyRed, size: 20),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Logout',
-                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.emergencyRed),
-                    ),
-                  ],
+          // Profile avatar
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppTheme.cyanGradient,
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryCyan.withValues(alpha: 0.2),
+                  blurRadius: 10,
                 ),
-              ),
-            ],
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppTheme.cyanGradient,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryCyan.withValues(alpha: 0.2),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.person, color: Colors.white, size: 22),
+              ],
             ),
+            child: const Icon(Icons.person, color: Colors.white, size: 22),
           ),
         ],
       ),
     );
   }
 
-  // ── System Status Bar ──────────────────────────────────────────────────
+  // ΓöÇΓöÇ System Status Bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildStatusBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1170,7 +825,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── SOS Button ─────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ SOS Button ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildSOSButton() {
     return Column(
       children: [
@@ -1274,7 +929,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Quick Actions ──────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Quick Actions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildQuickActions() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1315,8 +970,6 @@ class _HomeBodyState extends State<_HomeBody>
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _buildAssistantCard(),
         ],
       ),
     );
@@ -1370,69 +1023,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  Widget _buildAssistantCard() {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const AiEmergencyDashboardScreen(),
-          ),
-        );
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-        decoration: AppTheme.glassDecoration(
-          borderRadius: 18,
-          opacity: 0.08,
-          borderColor: AppTheme.primaryCyan.withValues(alpha: 0.2),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppTheme.cyanGradient,
-                boxShadow: AppTheme.neonGlow(AppTheme.primaryCyan,
-                    intensity: 0.25),
-              ),
-              child: const Icon(Icons.support_agent_rounded,
-                  color: Colors.white, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'AI Emergency Assistant',
-                    style: AppTheme.bodyMedium.copyWith(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Get safe guidance during emergencies without leaving the app.',
-                    style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textMuted,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: AppTheme.textMuted, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Map Card ────────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Map Card ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildMapCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1459,7 +1050,22 @@ class _HomeBodyState extends State<_HomeBody>
               // Map
               FlutterMap(
                 mapController: _mapController,
-                options: _mapOptions,
+                options: MapOptions(
+                  initialCenter: LatLng(
+                    _currentLat ?? 20.5937,
+                    _currentLng ?? 78.9629,
+                  ),
+                  initialZoom: _currentLat != null ? 15.0 : 4.0,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all,
+                  ),
+                  onTap: (_, _) {
+                    // Dismiss selected place popup when tapping the map
+                    if (_selectedPlace != null) {
+                      setState(() => _selectedPlace = null);
+                    }
+                  },
+                ),
                 children: [
                   TileLayer(
                     urlTemplate:
@@ -1675,7 +1281,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Place Marker ────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Place Marker ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildPlaceMarker(NearbyPlace place) {
     final color = _placeColor(place.type);
     final icon = _placeIcon(place.type);
@@ -1702,7 +1308,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Place Info Card (shown on marker tap) ──────────────────────────────
+  // ΓöÇΓöÇ Place Info Card (shown on marker tap) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildPlaceInfoCard(NearbyPlace place) {
     final color = _placeColor(place.type);
     final icon = _placeIcon(place.type);
@@ -1838,7 +1444,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Map Legend (below map card) ────────────────────────────────────────
+  // ΓöÇΓöÇ Map Legend (below map card) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildMapLegend() {
     // Only show legend when loading or when real data is available
     if (!_loadingPlaces && _nearbyPlaces.isEmpty) {
@@ -1946,7 +1552,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Emergency Places Section (Advanced) ─────────────────────────────────
+  // ΓöÇΓöÇ Emergency Places Section (Advanced) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildEmergencyPlacesSection() {
     if (_nearbyPlaces.isEmpty && !_loadingPlaces) {
       return const SizedBox.shrink();
@@ -1955,7 +1561,7 @@ class _HomeBodyState extends State<_HomeBody>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Section Header ──
+        // ΓöÇΓöÇ Section Header ΓöÇΓöÇ
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
@@ -2059,7 +1665,7 @@ class _HomeBodyState extends State<_HomeBody>
         ),
         const SizedBox(height: 14),
 
-        // ── Search Bar ──
+        // ΓöÇΓöÇ Search Bar ΓöÇΓöÇ
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Container(
@@ -2118,17 +1724,17 @@ class _HomeBodyState extends State<_HomeBody>
         ),
         const SizedBox(height: 12),
 
-        // ── Filter Tabs ──
+        // ΓöÇΓöÇ Filter Tabs ΓöÇΓöÇ
         _buildAdvancedFilterTabs(),
         const SizedBox(height: 12),
 
-        // ── Place Cards ──
+        // ΓöÇΓöÇ Place Cards ΓöÇΓöÇ
         _buildAdvancedPlaceCards(),
       ],
     );
   }
 
-  // ── Advanced Filter Tabs ────────────────────────────────────────────────
+  // ΓöÇΓöÇ Advanced Filter Tabs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildAdvancedFilterTabs() {
     final hospitalCount =
         _nearbyPlaces.where((p) => p.type == PlaceType.hospital).length;
@@ -2257,7 +1863,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Advanced Place Cards ────────────────────────────────────────────────
+  // ΓöÇΓöÇ Advanced Place Cards ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildAdvancedPlaceCards() {
     if (_loadingPlaces) {
       return Padding(
@@ -2491,7 +2097,7 @@ class _HomeBodyState extends State<_HomeBody>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Top Row: Icon + Name + Badge ──
+                    // ΓöÇΓöÇ Top Row: Icon + Name + Badge ΓöÇΓöÇ
                     Row(
                       children: [
                         // Type icon with gradient background
@@ -2624,7 +2230,7 @@ class _HomeBodyState extends State<_HomeBody>
                       ],
                     ),
 
-                    // ── Address ──
+                    // ΓöÇΓöÇ Address ΓöÇΓöÇ
                     if (place.address != null) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -2662,7 +2268,7 @@ class _HomeBodyState extends State<_HomeBody>
                       ),
                     ],
 
-                    // ── Distance + Travel Time ──
+                    // ΓöÇΓöÇ Distance + Travel Time ΓöÇΓöÇ
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -2759,7 +2365,7 @@ class _HomeBodyState extends State<_HomeBody>
                       ],
                     ),
 
-                    // ── Action Buttons ──
+                    // ΓöÇΓöÇ Action Buttons ΓöÇΓöÇ
                     const SizedBox(height: 14),
                     Row(
                       children: [
@@ -2883,7 +2489,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Place helper methods ──────────────────────────────────────────────
+  // ΓöÇΓöÇ Place helper methods ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   static Color _placeColor(PlaceType type) {
     switch (type) {
       case PlaceType.hospital:
@@ -2965,7 +2571,7 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Location Bar ───────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Location Bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   Widget _buildLocationBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -3011,7 +2617,7 @@ class _HomeBodyState extends State<_HomeBody>
   }
 }
 
-// ── Ripple Painter ────────────────────────────────────────────────────────
+// ΓöÇΓöÇ Ripple Painter ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 class _RipplePainter extends CustomPainter {
   final double progress;
   final Color color;
@@ -3041,7 +2647,7 @@ class _RipplePainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-// ── Particle Painter ──────────────────────────────────────────────────────
+// ΓöÇΓöÇ Particle Painter ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 class _ParticlePainter extends CustomPainter {
   final double progress;
   _ParticlePainter(this.progress);

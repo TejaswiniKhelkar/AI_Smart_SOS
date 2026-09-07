@@ -42,9 +42,8 @@ class _AiEmergencyAssistantScreenState
   static const List<String> _quickSuggestions = [
     'I had an accident',
     'First Aid',
-    'I\'m injured',
-    'Find emergency help',
-    'What should I do?',
+    'Nearby Hospital',
+    'Emergency Help',
   ];
 
   @override
@@ -530,6 +529,7 @@ class _AiEmergencyAssistantScreenState
   }
 
   Widget _buildMessageList() {
+    final itemCount = _messages.length + (_isSending ? 1 : 0);
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface.withValues(alpha: 0.9),
@@ -539,13 +539,60 @@ class _AiEmergencyAssistantScreenState
       child: ListView.separated(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-        itemCount: _messages.length,
+        itemCount: itemCount,
         separatorBuilder: (context, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
+          if (index == _messages.length) {
+            return _buildTypingIndicator();
+          }
           final message = _messages[index];
           return _buildChatBubble(message);
         },
       ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    final dark = _isDarkTheme(context);
+    final bubbleColor = dark ? AppTheme.surfaceLight : Colors.white;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+              bottomLeft: Radius.circular(6),
+              bottomRight: Radius.circular(20),
+            ),
+            border: Border.all(color: AppTheme.glassBorder),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.primaryCyan,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'AI is typing...',
+                style: AppTheme.bodyMedium.copyWith(
+                  color: dark ? AppTheme.textSecondary : AppTheme.textPrimary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

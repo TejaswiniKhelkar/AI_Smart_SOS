@@ -9,17 +9,12 @@ import 'gyroscope_service.dart';
 ///
 /// This class:
 /// 1. Starts / stops the native foreground service via [MethodChannel].
-/// 2. Receives raw (x, y, z) sensor data sent by the service.
-/// 3. Injects that data into the existing [AccelerometerService] and
-///    [GyroscopeService] broadcast streams so the Dart-side
-///    [AccidentMotionDetector] pipeline works unchanged.
-/// 4. Monitors [AppLifecycleState] to only inject native data when the
-///    app is in the background (foreground uses `sensors_plus`).
+/// 2. Handles the intent callback when an accident is detected.
 ///
 /// ## Platform safety
 ///
 /// On web and non-Android platforms all operations are no-ops.
-class ForegroundSensorBridge with WidgetsBindingObserver {
+class ForegroundSensorBridge {
   ForegroundSensorBridge();
 
   static const _channel =
@@ -34,12 +29,8 @@ class ForegroundSensorBridge with WidgetsBindingObserver {
 
   bool _serviceRunning = false;
   bool _started = false;
-
-  /// `true` when the app is paused / inactive / hidden / detached.
-  bool _isInBackground = false;
-
-  /// Whether the bridge is injecting native sensor data.
-  bool get isInBackground => _isInBackground;
+  
+  VoidCallback? onAccidentDetected;
 
   /// Whether the native foreground service is running.
   bool get isServiceRunning => _serviceRunning;
@@ -48,16 +39,7 @@ class ForegroundSensorBridge with WidgetsBindingObserver {
   // PUBLIC API
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Starts the native foreground service and begins listening for
-  /// sensor data from the native side.
-  ///
-  /// [accelerometerService] and [gyroscopeService] are the **existing**
-  /// service instances (owned by [AccidentMotionDetector]) into which
-  /// background sensor readings will be injected.
-  Future<void> start({
-    required AccelerometerService accelerometerService,
-    required GyroscopeService gyroscopeService,
-  }) async {
+  Future<void> start() async {
     if (_started) {
       debugPrint('[FgSensorBridge] Already started — ignoring.');
       return;
@@ -69,14 +51,12 @@ class ForegroundSensorBridge with WidgetsBindingObserver {
       return;
     }
 
-    _accelerometerService = accelerometerService;
-    _gyroscopeService = gyroscopeService;
-
-    // Register for lifecycle changes
-    WidgetsBinding.instance.addObserver(this);
-
-    // Set up the handler for native → Flutter sensor data
-    _channel.setMethodCallHandler(_handleNativeCall);
+    // Set up the handler for native intents
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onAccidentAlertFromIntent') {
+        onAccidentDetected?.call();
+      }
+    });
 
     // Start the native foreground service
     try {
@@ -94,7 +74,6 @@ class ForegroundSensorBridge with WidgetsBindingObserver {
   Future<void> stop() async {
     if (!_started) return;
 
-    WidgetsBinding.instance.removeObserver(this);
     _channel.setMethodCallHandler(null);
 
     if (_serviceRunning) {
@@ -106,8 +85,6 @@ class ForegroundSensorBridge with WidgetsBindingObserver {
       _serviceRunning = false;
     }
 
-    _accelerometerService = null;
-    _gyroscopeService = null;
     _started = false;
     debugPrint('[FgSensorBridge] Stopped and cleaned up.');
   }
@@ -135,61 +112,5 @@ class ForegroundSensorBridge with WidgetsBindingObserver {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // LIFECYCLE OBSERVER
-  // ═══════════════════════════════════════════════════════════════════════
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final wasBg = _isInBackground;
-
-    switch (state) {
-      case AppLifecycleState.resumed:
-        _isInBackground = false;
-        if (wasBg) {
-          debugPrint('[FgSensorBridge] App RESUMED — '
-              'native sensor injection paused (sensors_plus active).');
-        }
-        break;
-      case AppLifecycleState.paused:
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.detached:
-        _isInBackground = true;
-        if (!wasBg) {
-          debugPrint('[FgSensorBridge] App BACKGROUNDED — '
-              'native sensor injection active.');
-        }
-        break;
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // NATIVE → FLUTTER METHOD CALL HANDLER
-  // ═══════════════════════════════════════════════════════════════════════
-
-  Future<void> _handleNativeCall(MethodCall call) async {
-    // Only inject sensor data when the app is in the background.
-    // In the foreground, sensors_plus delivers data through its own
-    // platform channel and we don't want duplicates.
-    if (!_isInBackground) return;
-
-    switch (call.method) {
-      case 'onAccelerometerData':
-        final args = call.arguments as Map;
-        final x = (args['x'] as num).toDouble();
-        final y = (args['y'] as num).toDouble();
-        final z = (args['z'] as num).toDouble();
-        _accelerometerService?.injectReading(x, y, z);
-        break;
-
-      case 'onGyroscopeData':
-        final args = call.arguments as Map;
-        final x = (args['x'] as num).toDouble();
-        final y = (args['y'] as num).toDouble();
-        final z = (args['z'] as num).toDouble();
-        _gyroscopeService?.injectReading(x, y, z);
-        break;
-    }
-  }
 }

@@ -19,6 +19,9 @@ import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import io.flutter.FlutterInjector
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 
 /**
@@ -69,6 +72,10 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
     private var gyroscope: Sensor? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
+    // Background Flutter Engine
+    private var backgroundFlutterEngine: FlutterEngine? = null
+    private var backgroundMethodChannel: MethodChannel? = null
+
     // Handler on the main/UI looper for MethodChannel calls (required by
     // Flutter's platform channel contract).
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -88,7 +95,40 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
         super.onCreate()
         createNotificationChannels()
         acquireWakeLock()
-        Log.d(TAG, "Service created")
+
+        // Spawn the background Flutter engine
+        backgroundFlutterEngine = FlutterEngine(this)
+        
+        val loader = FlutterInjector.instance().flutterLoader()
+        if (!loader.initialized()) {
+            loader.startInitialization(this)
+            loader.ensureInitializationComplete(this, null)
+        }
+        
+        backgroundMethodChannel = MethodChannel(
+            backgroundFlutterEngine!!.dartExecutor.binaryMessenger,
+            "com.example.ai_smart_sos/background_sensor"
+        )
+        
+        // Listen for requests from the background Dart isolate
+        backgroundMethodChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "showAccidentAlert" -> {
+                    showAccidentAlert()
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        
+        backgroundFlutterEngine!!.dartExecutor.executeDartEntrypoint(
+            DartExecutor.DartEntrypoint(
+                loader.findAppBundlePath(),
+                "backgroundMain"
+            )
+        )
+
+        Log.d(TAG, "Service created and background FlutterEngine started")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -116,6 +156,13 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
     override fun onDestroy() {
         stopSensorListening()
         releaseWakeLock()
+        
+        // Clean up background engine
+        backgroundMethodChannel?.setMethodCallHandler(null)
+        backgroundMethodChannel = null
+        backgroundFlutterEngine?.destroy()
+        backgroundFlutterEngine = null
+        
         isRunning = false
         Log.d(TAG, "Service destroyed")
         super.onDestroy()
@@ -244,7 +291,7 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
                 )
                 mainHandler.post {
                     try {
-                        methodChannel?.invokeMethod("onAccelerometerData", data)
+                        backgroundMethodChannel?.invokeMethod("onAccelerometerData", data)
                     } catch (e: Exception) {
                         // Flutter engine may be detached — safe to ignore
                     }
@@ -262,7 +309,7 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
                 )
                 mainHandler.post {
                     try {
-                        methodChannel?.invokeMethod("onGyroscopeData", data)
+                        backgroundMethodChannel?.invokeMethod("onGyroscopeData", data)
                     } catch (e: Exception) {
                         // Flutter engine may be detached — safe to ignore
                     }

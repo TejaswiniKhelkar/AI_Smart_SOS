@@ -20,9 +20,10 @@ import 'emergency_contacts_screen.dart';
 import 'alert_history_screen.dart';
 import 'accident_alert_dialog.dart';
 import '../services/accident_detection_service.dart';
-import '../services/accident_motion_detector.dart';
+
 import '../services/foreground_sensor_bridge.dart';
 import '../services/location_tracking_service.dart';
+import 'user_profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -184,10 +185,6 @@ class _HomeBodyState extends State<_HomeBody>
   late final AccidentDetectionService _accidentService;
   bool _accidentDialogShowing = false;
 
-  // High-confidence accident detection (Layer 3/4 — real sensor fusion)
-  late final AccidentMotionDetector _motionDetector;
-  StreamSubscription<MotionEvent>? _motionEventSubscription;
-
   /// Tracks whether the most recent AccidentAlertDialog was opened by
   /// the high-confidence sensor detector (true) vs the simple detector
   /// or manual test button (false). Used for targeted debug logging.
@@ -269,26 +266,15 @@ class _HomeBodyState extends State<_HomeBody>
       onAccidentDetected: _onAccidentDetected,
     );
 
-    // Start high-confidence accident detection (real sensor fusion)
-    _motionDetector = AccidentMotionDetector();
-    _motionDetector.startDetection();
-    _motionEventSubscription = _motionDetector.eventStream.listen(
-      _onMotionEvent,
-      onError: (Object e) =>
-          debugPrint('[SOS-AutoTrigger] Motion event stream error: $e'),
-      cancelOnError: false,
-    );
-    debugPrint('[SOS-AutoTrigger] Subscribed to AccidentMotionDetector eventStream.');
-
-    // Start the foreground service bridge for background sensor monitoring.
-    // The bridge injects native sensor data into the existing services when
-    // the app is backgrounded, so the full AccidentMotionDetector pipeline
-    // keeps running even with the screen locked.
-    _sensorBridge.start(
-      accelerometerService:
-          _motionDetector.impactService.accelerometerService,
-      gyroscopeService: _motionDetector.gyroscopeService,
-    );
+    // Setup foreground service bridge to listen for background detection
+    _sensorBridge.onAccidentDetected = () {
+      debugPrint('[SOS-AutoTrigger] Received accident intent from background service!');
+      _autoTriggerActive = true;
+      _onAccidentDetected();
+    };
+    
+    // Start the foreground service so the background isolate handles accident detection
+    _sensorBridge.start();
 
     // Register for app lifecycle changes
     WidgetsBinding.instance.addObserver(this);
@@ -333,12 +319,6 @@ class _HomeBodyState extends State<_HomeBody>
       // Reset the simple detector cooldown (existing behaviour)
       _accidentService.resetCooldown();
 
-      // Enforce the high-confidence cooldown on the motion detector so
-      // the same physical incident cannot re-trigger the SOS countdown.
-      // Also clears any in-progress incident analysis and stale
-      // pending impact/rotation events.
-      _motionDetector.enforceHighConfidenceCooldown();
-
       if (wasAutoTrigger) {
         // Distinguish between SOS-sent vs cancelled.
         // _sosPressed is set to true by _triggerSOS when SOS is actually sent.
@@ -349,8 +329,6 @@ class _HomeBodyState extends State<_HomeBody>
           debugPrint('[SOS-AutoTrigger] ✅ AUTO-SOS COMPLETED SUCCESSFULLY');
           debugPrint('[SOS-AutoTrigger]   Flow: sensor → high-confidence → '
               '30s countdown → SOS sent');
-          debugPrint('[SOS-AutoTrigger]   Sensor state: cooldown enforced '
-              '(${_motionDetector.confidenceConfig.highConfidenceCooldown.inSeconds}s)');
           debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
           debugPrint('');
         } else {
@@ -359,8 +337,6 @@ class _HomeBodyState extends State<_HomeBody>
           debugPrint('[SOS-AutoTrigger] 🟢 AUTO-SOS CANCELLED (user is safe)');
           debugPrint('[SOS-AutoTrigger]   User tapped "I\'m Safe" — '
               'no SOS sent.');
-          debugPrint('[SOS-AutoTrigger]   Sensor state: cooldown enforced '
-              '(${_motionDetector.confidenceConfig.highConfidenceCooldown.inSeconds}s)');
           debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
           debugPrint('');
         }
@@ -370,47 +346,7 @@ class _HomeBodyState extends State<_HomeBody>
     });
   }
 
-  /// Handles motion events from the high-confidence [AccidentMotionDetector].
-  ///
-  /// Only [highConfidenceAccidentDetected] events trigger the SOS flow.
-  /// The existing [_accidentDialogShowing] flag prevents duplicate countdowns.
-  void _onMotionEvent(MotionEvent event) {
-    if (event.type != MotionEventType.highConfidenceAccidentDetected) return;
 
-    debugPrint('');
-    debugPrint('[SOS-AutoTrigger] ════════════════════════════════════════');
-    debugPrint('[SOS-AutoTrigger] highConfidenceAccidentDetected RECEIVED');
-    debugPrint('[SOS-AutoTrigger]   confidence=${event.confidenceScore?.toStringAsFixed(2)}');
-    debugPrint('[SOS-AutoTrigger]   message=${event.message}');
-    debugPrint('[SOS-AutoTrigger] ════════════════════════════════════════');
-    debugPrint('');
-
-    // Duplicate-trigger protection: if the countdown dialog is already
-    // showing (from any source — manual, simple detector, or this detector),
-    // do NOT start another one.
-    if (_accidentDialogShowing) {
-      debugPrint('[SOS-AutoTrigger] ⛔ Duplicate trigger PREVENTED — '
-          'accident dialog already showing.');
-      return;
-    }
-
-    debugPrint('[SOS-AutoTrigger] 🚨 Automatic SOS trigger REQUESTED — '
-        'showing AccidentAlertDialog with 30s countdown.');
-
-    // If the app is in the background, we cannot directly show a dialog.
-    // Instead, post a high-priority notification with full-screen intent
-    // to bring the app to the foreground, and defer the dialog.
-    if (_sensorBridge.isInBackground) {
-      debugPrint('[SOS-AutoTrigger] App is BACKGROUNDED — '
-          'showing full-screen notification to wake user.');
-      _pendingAccidentTrigger = true;
-      _sensorBridge.showAccidentAlertNotification();
-      return;
-    }
-
-    _autoTriggerActive = true;
-    _onAccidentDetected();
-  }
 
   @override
   void dispose() {
@@ -419,12 +355,6 @@ class _HomeBodyState extends State<_HomeBody>
 
     // Stop foreground service bridge
     _sensorBridge.stop();
-
-    // Clean up high-confidence motion detector subscription & detector
-    _motionEventSubscription?.cancel();
-    _motionEventSubscription = null;
-    _motionDetector.dispose();
-    debugPrint('[SOS-AutoTrigger] Motion detector subscription cancelled & disposed.');
 
     _locationTracker.stopTracking();
     _accidentService.stopListening();
@@ -1060,9 +990,14 @@ class _HomeBodyState extends State<_HomeBody>
             color: AppTheme.surfaceLight,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             onSelected: (value) async {
-              if (value == 'logout') {
+              if (value == 'profile') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserProfileScreen()),
+                );
+              } else if (value == 'logout') {
                 await AuthService.logout();
-                if (!context.mounted) return;
+                if (!mounted) return;
                 Navigator.pushAndRemoveUntil(
                   context,
                   PageRouteBuilder(
@@ -1076,6 +1011,19 @@ class _HomeBodyState extends State<_HomeBody>
               }
             },
             itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline, color: AppTheme.primaryCyan, size: 20),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Profile',
+                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary),
+                    ),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: 'logout',
                 child: Row(

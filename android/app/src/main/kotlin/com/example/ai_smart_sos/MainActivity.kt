@@ -25,19 +25,21 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "com.example.ai_smart_sos/foreground_sensor"
     }
 
+    private var uiChannel: MethodChannel? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        val channel = MethodChannel(
+        uiChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL,
         )
 
         // Share the channel with the foreground service so it can send
         // sensor data back to the Flutter engine.
-        AccidentDetectionForegroundService.methodChannel = channel
+        AccidentDetectionForegroundService.methodChannel = uiChannel
 
-        channel.setMethodCallHandler { call, result ->
+        uiChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "startService" -> {
                     startAccidentDetectionService()
@@ -78,6 +80,20 @@ class MainActivity : FlutterActivity() {
         }
 
         Log.d(TAG, "MethodChannel configured: $CHANNEL")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (intent?.getBooleanExtra("accident_detected", false) == true) {
+            intent?.removeExtra("accident_detected")
+            uiChannel?.invokeMethod("onAccidentAlertFromIntent", null)
+            Log.d(TAG, "Notified Flutter of accident_detected intent")
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 
     // ── Service helpers ──────────────────────────────────────────────────

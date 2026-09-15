@@ -80,6 +80,69 @@ app.post('/api/assistant', async (req, res) => {
   }
 });
 
+app.post('/api/sms', async (req, res) => {
+  const { to, message } = req.body || {};
+
+  if (!to || !to.length || !message) {
+    return res.status(400).json({ error: 'Missing recipients or message body' });
+  }
+
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    return res.status(501).json({
+      error: 'Provider not configured',
+      detail: 'SMS delivery skipped. Configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in backend .env to enable real delivery.'
+    });
+  }
+
+  console.log(`[SMS] Sending ${to.length} messages via Twilio...`);
+  
+  let successCount = 0;
+  let failures = [];
+
+  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const authHeader = 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+  for (const recipient of to) {
+    try {
+      const body = new URLSearchParams();
+      body.append('To', recipient);
+      body.append('From', fromNumber);
+      body.append('Body', message);
+
+      const twilioRes = await fetch(twilioUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: body.toString()
+      });
+
+      if (twilioRes.ok) {
+        successCount++;
+        console.log(`[SMS] Delivered to ${recipient}`);
+      } else {
+        const errorText = await twilioRes.text();
+        console.error(`[SMS] Failed to send to ${recipient}: ${twilioRes.status} ${errorText}`);
+        failures.push({ to: recipient, error: errorText });
+      }
+    } catch (e) {
+      console.error(`[SMS] Exception sending to ${recipient}:`, e);
+      failures.push({ to: recipient, error: e.toString() });
+    }
+  }
+
+  if (successCount === 0 && to.length > 0) {
+    return res.status(502).json({ error: 'Failed to send all SMS', failures });
+  }
+
+  return res.json({ success: true, sentCount: successCount, failures });
+});
+
 app.listen(PORT, () => {
   console.log(`AI assistant backend running on port ${PORT}`);
 });

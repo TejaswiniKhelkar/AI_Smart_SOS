@@ -75,6 +75,19 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(true)
                 }
+                "simulateTestAccident" -> {
+                    val intent = Intent(
+                        this,
+                        AccidentDetectionForegroundService::class.java,
+                    ).apply { action = "SIMULATE_TEST_ACCIDENT" }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

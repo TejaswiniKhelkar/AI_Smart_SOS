@@ -49,7 +49,11 @@ class AiEmergencyAssistantService {
 
     // Local fallback
     return Future.delayed(const Duration(milliseconds: 250), () {
-      return _localResponse(message);
+      final fallback = _localResponse(message);
+      if (fallback == _defaultResponse()) {
+        throw Exception('API failed and no specific local fallback is available.');
+      }
+      return fallback;
     });
   }
 

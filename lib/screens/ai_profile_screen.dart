@@ -147,11 +147,14 @@ class _AiProfileScreenState extends State<AiProfileScreen>
       lastDate: now,
       builder: (context, child) {
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
               primary: AppTheme.primaryCyan,
+              onPrimary: Colors.white,
               surface: AppTheme.surface,
+              onSurface: AppTheme.textPrimary,
             ),
+            dialogBackgroundColor: AppTheme.surface,
           ),
           child: child!,
         );
@@ -162,8 +165,7 @@ class _AiProfileScreenState extends State<AiProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
+    return Container(
         decoration:
             const BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: ParticleBackground(
@@ -215,7 +217,6 @@ class _AiProfileScreenState extends State<AiProfileScreen>
                   ),
           ),
         ),
-      ),
     );
   }
 

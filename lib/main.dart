@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'package:flutter/services.dart';
@@ -69,6 +70,9 @@ void backgroundMain() {
         (args['y'] as num).toDouble(),
         (args['z'] as num).toDouble(),
       );
+    } else if (call.method == 'simulateTestAccident') {
+      debugPrint('[BackgroundIsolate] Received diagnostic test command. Firing alert...');
+      channel.invokeMethod('showAccidentAlert');
     }
   });
   
@@ -84,6 +88,7 @@ void backgroundMain() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -97,8 +102,9 @@ class SmartSOSApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      showPerformanceOverlay: false,
       title: 'AI Smart SOS',
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
       home: const SplashScreen(),
     );
   }

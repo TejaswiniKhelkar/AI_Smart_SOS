@@ -3,6 +3,7 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -49,8 +50,8 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAlZxlRdjy02odav6sR5ndreGDcIJRmqsE',
+  static FirebaseOptions get web => FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_API_KEY_WEB'] ?? '',
     appId: '1:756064757954:web:63c049b8149183212bb35b',
     messagingSenderId: '756064757954',
     projectId: 'ai-smart-sos',
@@ -59,8 +60,8 @@ class DefaultFirebaseOptions {
     measurementId: 'G-09CDLB00ZE',
   );
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyArH6Up9zn8QEbM-zbZiL7ED4lEYVDCvW8',
+  static FirebaseOptions get android => FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_API_KEY_ANDROID'] ?? '',
     appId: '1:756064757954:android:87b37b2b6f4a04612bb35b',
     messagingSenderId: '756064757954',
     projectId: 'ai-smart-sos',

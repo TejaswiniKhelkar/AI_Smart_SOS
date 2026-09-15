@@ -1,10 +1,12 @@
-import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/emergency_contact.dart';
 import '../models/app_settings.dart';
 import 'profile_service.dart';
 import 'health_service.dart';
 import 'settings_service.dart';
 import 'contact_service.dart';
+import 'ai_api_service.dart';
 
 /// Builds and sends emergency SMS messages with enriched profile data.
 class SmsService {
@@ -81,9 +83,9 @@ class SmsService {
     }
   }
 
-  /// Opens the SMS app with the emergency message for each recipient.
-  /// Returns the number of SMS intents launched.
-  static Future<int> sendEmergencySMS({
+  /// Sends the emergency SMS message via the backend provider.
+  /// Returns a status string: 'sent', 'failed_no_provider', or 'failed'.
+  static Future<String> sendEmergencySMS({
     required double latitude,
     required double longitude,
     required String googleMapsLink,
@@ -95,22 +97,37 @@ class SmsService {
     );
 
     final recipients = await getRecipients();
-    if (recipients.isEmpty) return 0;
+    if (recipients.isEmpty) return 'failed';
 
-    int sent = 0;
-    for (final contact in recipients) {
-      final uri = Uri(
-        scheme: 'sms',
-        path: contact.phone,
-        queryParameters: {'body': message},
-      );
-      try {
-        await launchUrl(uri);
-        sent++;
-      } catch (_) {
-        // SMS app may not be available; continue
+    final toNumbers = recipients.map((c) {
+      String num = c.phone.replaceAll(RegExp(r'\D'), '');
+      if (num.length == 10) return '+91$num';
+      if (num.startsWith('91') && num.length == 12) return '+$num';
+      return '+$num';
+    }).toList();
+
+    try {
+      final backendUrl = AiApiService().backendUrl;
+      final uri = Uri.parse('$backendUrl/api/sms');
+      
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'to': toNumbers,
+          'message': message,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return 'sent';
+      } else if (response.statusCode == 501) {
+        return 'failed_no_provider';
+      } else {
+        return 'failed';
       }
+    } catch (e) {
+      return 'failed';
     }
-    return sent;
   }
 }

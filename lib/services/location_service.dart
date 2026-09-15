@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 /// Enhanced location service providing GPS position, Google Maps links,
 /// and structured location data for SOS alerts.
@@ -36,14 +39,29 @@ class LocationService {
       );
     }
 
-    // ── Step 2: Fetch position directly (skip isLocationServiceEnabled) ─
+    // ── Step 2: Try Last Known Position first to speed up load ─
+    Position? lastKnown;
+    try {
+      lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        final age = DateTime.now().difference(lastKnown.timestamp);
+        if (age.inMinutes < 5) {
+          debugPrint('[LocationService] Using recent last known position (age: ${age.inSeconds}s)');
+          return lastKnown;
+        }
+      }
+    } catch (_) {
+      // Ignore errors fetching last known position
+    }
+
+    // ── Step 3: Fetch current position if no recent cached position ─
     debugPrint('[LocationService] Fetching current position...');
     try {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 0,
-          timeLimit: Duration(seconds: 30),
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+          timeLimit: Duration(seconds: 15),
         ),
       );
       debugPrint(
@@ -52,13 +70,26 @@ class LocationService {
         '${position.longitude.toStringAsFixed(6)}',
       );
       return position;
+    } on TimeoutException {
+      if (lastKnown != null) {
+        debugPrint('[LocationService] Timeout fetching current position, falling back to older lastKnown.');
+        return lastKnown;
+      }
+      throw LocationException('Unable to get your location. Please check GPS and try again.');
     } on LocationServiceDisabledException {
+      if (lastKnown != null) {
+        debugPrint('[LocationService] Location service disabled, falling back to lastKnown.');
+        return lastKnown;
+      }
       // This is thrown by the platform when GPS is truly disabled.
       debugPrint('[LocationService] Platform: location service disabled.');
       throw SosLocationServiceException(
         'Location services are disabled. '
         'Please enable GPS in your device settings.',
       );
+    } catch (e) {
+      if (lastKnown != null) return lastKnown;
+      throw LocationException('Unable to get your location. Please check GPS and try again.');
     }
   }
 
@@ -83,6 +114,38 @@ class LocationService {
       googleMapsLink: link,
       timestamp: position.timestamp,
     );
+  }
+
+  /// Reverse geocodes using OpenStreetMap Nominatim
+  static Future<String?> getAddressFromCoordinates(double lat, double lng) async {
+    try {
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1');
+      final response = await http.get(url, headers: {
+        'User-Agent': 'AI Smart SOS/1.0',
+      });
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data != null && data['address'] != null) {
+          final address = data['address'];
+          final parts = <String>[];
+          
+          if (address['road'] != null) parts.add(address['road']);
+          if (address['suburb'] != null) parts.add(address['suburb']);
+          if (address['city'] ?? address['town'] ?? address['village'] != null) {
+            parts.add(address['city'] ?? address['town'] ?? address['village']);
+          }
+          
+          if (parts.isNotEmpty) {
+            return parts.join(', ');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Reverse geocode error: $e');
+    }
+    return null;
   }
 }
 

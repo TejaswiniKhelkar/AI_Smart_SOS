@@ -215,8 +215,10 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                       ),
                       child: MaterialButton(
                         onPressed: () async {
-                          if (nameCtrl.text.trim().isEmpty ||
-                              phoneCtrl.text.trim().isEmpty) {
+                          final name = nameCtrl.text.trim();
+                          final phone = phoneCtrl.text.trim();
+                          
+                          if (name.isEmpty || phone.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
@@ -234,11 +236,29 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                             return;
                           }
 
+                          if (phone.replaceAll(RegExp(r'\D'), '').length < 10) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Please enter a valid phone number (min 10 digits)',
+                                  style: AppTheme.bodyMedium
+                                      .copyWith(color: Colors.white),
+                                ),
+                                backgroundColor: AppTheme.emergencyRed,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
                           if (existing != null) {
                             await ContactService.updateContact(
                               existing.copyWith(
-                                name: nameCtrl.text.trim(),
-                                phone: phoneCtrl.text.trim(),
+                                name: name,
+                                phone: phone,
                                 relationship: selectedRelation,
                               ),
                             );
@@ -247,8 +267,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                               id: DateTime.now()
                                   .millisecondsSinceEpoch
                                   .toString(),
-                              name: nameCtrl.text.trim(),
-                              phone: phoneCtrl.text.trim(),
+                              name: name,
+                              phone: phone,
                               relationship: selectedRelation,
                             );
                             final success =

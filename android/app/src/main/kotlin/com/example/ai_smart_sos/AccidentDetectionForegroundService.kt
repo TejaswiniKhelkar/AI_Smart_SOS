@@ -138,6 +138,12 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
                 showAccidentAlert()
                 return START_STICKY
             }
+            "SIMULATE_TEST_ACCIDENT" -> {
+                mainHandler.post {
+                    backgroundMethodChannel?.invokeMethod("simulateTestAccident", null)
+                }
+                return START_STICKY
+            }
         }
 
         // Normal start — only start once
@@ -254,13 +260,21 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
         gyroscope     = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
         accelerometer?.let {
-            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
-            Log.d(TAG, "Accelerometer listener registered (SENSOR_DELAY_GAME)")
+            try {
+                sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+                Log.d(TAG, "Accelerometer listener registered (SENSOR_DELAY_GAME)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to register accelerometer: \${e.message}")
+            }
         } ?: Log.w(TAG, "No accelerometer sensor available on this device")
 
         gyroscope?.let {
-            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
-            Log.d(TAG, "Gyroscope listener registered (SENSOR_DELAY_GAME)")
+            try {
+                sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+                Log.d(TAG, "Gyroscope listener registered (SENSOR_DELAY_GAME)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to register gyroscope: \${e.message}")
+            }
         } ?: Log.w(TAG, "No gyroscope sensor available on this device")
     }
 

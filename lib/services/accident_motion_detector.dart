@@ -473,6 +473,8 @@ class AccidentMotionDetector {
   // ── Public getters ───────────────────────────────────────────────────────
 
   bool get isDetecting => _isDetecting;
+  bool get isAccelerometerAvailable => _impactService.accelerometerService.isAvailable;
+  bool get isGyroscopeAvailable => _gyroscopeService.isAvailable;
   MotionEvent? get lastEvent => _lastEvent;
   int get totalRotations => _totalRotations;
   int get totalAccidents => _totalAccidents;
@@ -1484,6 +1486,34 @@ class AccidentMotionDetector {
   /// The expiry timers ensure stale events are auto-cleared, so by the
   /// time this runs both events are guaranteed to be fresh if they exist.
   void _checkCombination(DateTime now) {
+    if (!isGyroscopeAvailable) {
+      if (_recentImpact != null) {
+        // Impact-Only Fallback Mode
+        _lastAccidentTime = now;
+        _totalAccidents++;
+        final impact = _recentImpact!;
+        _clearRecentImpact();
+
+        debugPrint('[AccidentMotion] ⚠️ Gyro unavailable — Impact-Only Mode triggered possible accident.');
+
+        final motionEvent = MotionEvent(
+          type: MotionEventType.possibleAccidentMotionDetected,
+          detectedAt: now,
+          impactEvent: impact,
+          message: 'Impact-Only fallback mode triggered.',
+        );
+        _emit(motionEvent);
+
+        _addEvidence(
+          type: 'impact_only_fallback',
+          score: confidenceConfig.rotationScore + confidenceConfig.combinedAccidentScore,
+          description: 'Compensating for missing gyroscope',
+          magnitude: impact.magnitude,
+        );
+      }
+      return;
+    }
+
     if (_recentImpact == null || _recentRotationTime == null) {
       // Only one event exists — log what we're waiting for.
       if (_recentImpact != null) {

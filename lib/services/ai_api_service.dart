@@ -1,4 +1,3 @@
-// ignore_for_file: use_null_aware_elements
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -7,12 +6,43 @@ class AiApiService {
   static final AiApiService _instance = AiApiService._();
   factory AiApiService() => _instance;
 
-  // Retrieve the API key via dart-define to avoid hardcoding secrets.
-  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
+  static const String _envBackend = String.fromEnvironment('AI_BACKEND_URL');
+  static const String _emulatorUrl = 'http://10.0.2.2:3000';
+  static const String _lanUrl = 'http://192.168.31.74:3000'; // Replace with actual PC LAN IP if it changes
+
+  String _activeBackend = _emulatorUrl; // fallback default
+  
+  String get backendUrl => _envBackend.isNotEmpty ? _envBackend : _activeBackend;
 
   Future<bool> ping() async {
-    // If the API key is provided, we consider the backend reachable.
-    return _apiKey.isNotEmpty;
+    // If explicitly defined via dart-define, use it
+    if (_envBackend.isNotEmpty) {
+      return await _pingUrl(_envBackend);
+    }
+    
+    // Check LAN IP first (works for physical devices on same WiFi, and emulator)
+    if (await _pingUrl(_lanUrl)) {
+      _activeBackend = _lanUrl;
+      return true;
+    }
+    
+    // Check emulator loopback
+    if (await _pingUrl(_emulatorUrl)) {
+      _activeBackend = _emulatorUrl;
+      return true;
+    }
+    
+    return false;
+  }
+
+  Future<bool> _pingUrl(String url) async {
+    try {
+      final uri = Uri.parse('$url/health');
+      final r = await http.get(uri).timeout(const Duration(seconds: 2));
+      return r.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<String> fetchResponse(
@@ -22,72 +52,26 @@ class AiApiService {
     List<Map<String, dynamic>>? nearbyPlaces,
     String? language,
   }) async {
-    if (_apiKey.isEmpty) {
-      throw Exception('API key not configured in the app.');
-    }
-
-    final uri = Uri.parse(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey');
-
-    // Build the system context
-    final systemPrompt = StringBuffer();
-    systemPrompt.writeln(
-        'You are an emergency response assistant. Provide short, clear, actionable guidance. '
-        'Always recommend contacting professional services or using SOS for life-threatening emergencies. '
-        'Do not claim to replace doctors, police, or ambulance services.');
-
-    if (language != null) {
-      final langMap = {'en': 'English', 'hi': 'Hindi', 'mr': 'Marathi'};
-      final langName = langMap[language] ?? language;
-      systemPrompt.writeln('Respond in $langName. Keep answers short and actionable.');
-    }
-    if (profile != null) {
-      systemPrompt.writeln('User profile: ${json.encode(profile)}');
-    }
-    if (location != null) {
-      systemPrompt.writeln('Location: ${json.encode(location)}');
-    }
-    if (nearbyPlaces != null) {
-      systemPrompt.writeln('Nearby places: ${json.encode(nearbyPlaces)}');
-    }
-
+    final uri = Uri.parse('$backendUrl/api/assistant');
     final body = {
-      "systemInstruction": {
-        "parts": [
-          {"text": systemPrompt.toString()}
-        ]
-      },
-      "contents": [
-        {
-          "role": "user",
-          "parts": [
-            {"text": prompt}
-          ]
-        }
-      ],
-      "generationConfig": {
-        "temperature": 0.2,
-        "maxOutputTokens": 300,
-      }
+      'prompt': prompt,
+      if (language != null) 'language': language,
+      if (profile != null) 'profile': profile,
+      if (location != null) 'location': location,
+      if (nearbyPlaces != null) 'nearbyPlaces': nearbyPlaces,
     };
 
     final resp = await http
         .post(uri,
             headers: {'Content-Type': 'application/json'},
             body: json.encode(body))
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 10));
 
     if (resp.statusCode == 200) {
-      final data = json.decode(resp.body) as Map<String, dynamic>;
-      try {
-        final text = data['candidates'][0]['content']['parts'][0]['text'] as String;
-        return text.trim();
-      } catch (e) {
-        throw Exception('Failed to parse AI response: $e');
-      }
-    } else {
-      final errorText = resp.body;
-      throw Exception('AI API returned ${resp.statusCode}: $errorText');
+      final j = json.decode(resp.body) as Map<String, dynamic>;
+      return (j['reply'] as String?) ?? '';
     }
+
+    throw Exception('Backend returned ${resp.statusCode}');
   }
 }

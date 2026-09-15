@@ -125,43 +125,24 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
-        child: Stack(
+    return Container(
+      color: AppTheme.background,
+      child: SafeArea(
+        child: Column(
           children: [
-            // Particle background
-            AnimatedBuilder(
-              animation: _particleController,
-              builder: (context, _) {
-                return CustomPaint(
-                  painter: _ParticlePainter(_particleController.value),
-                  size: Size.infinite,
-                );
-              },
-            ),
-
-            // Main content
-            SafeArea(
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: _isLoading
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                  color: AppTheme.primaryCyan))
-                          : _alerts.isEmpty
-                              ? _buildEmptyState()
-                              : _buildAlertList(),
-                    ),
-                  ],
-                ),
-              ),
+            _buildHeader(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _alerts.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          itemCount: _alerts.length,
+                          itemBuilder: (context, index) => _buildAlertCard(_alerts[index]),
+                        ),
             ),
           ],
         ),
@@ -170,68 +151,33 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(bottom: BorderSide(color: AppTheme.glassBorder)),
+      ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          Text(
+            'Emergency History',
+            style: AppTheme.headingMedium.copyWith(color: AppTheme.textPrimary),
+          ),
           Container(
-            width: 40,
-            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.emergencyRed.withValues(alpha: 0.1),
-              border:
-                  Border.all(color: AppTheme.emergencyRed.withValues(alpha: 0.3)),
+              color: AppTheme.primaryCyan.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.history,
-                color: AppTheme.emergencyRed, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'ALERT HISTORY',
-                style: AppTheme.headingSmall.copyWith(fontSize: 14),
-              ),
-              Text(
-                '${_alerts.length} alert${_alerts.length == 1 ? '' : 's'} logged',
-                style: AppTheme.bodySmall.copyWith(fontSize: 11),
-              ),
-            ],
-          ),
-          const Spacer(),
-          if (_alerts.isNotEmpty)
-            GestureDetector(
-              onTap: _confirmClearHistory,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppTheme.emergencyRed.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: AppTheme.emergencyRed.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.delete_outline,
-                        color: AppTheme.emergencyRed.withValues(alpha: 0.8),
-                        size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Clear',
-                      style: AppTheme.bodySmall.copyWith(
-                        color: AppTheme.emergencyRed,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+            child: Text(
+              '${_alerts.length} Records',
+              style: AppTheme.bodySmall.copyWith(
+                color: AppTheme.primaryCyan,
+                fontWeight: FontWeight.w600,
               ),
             ),
+          ),
         ],
       ),
     );
@@ -242,260 +188,116 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.successGreen.withValues(alpha: 0.08),
-              border:
-                  Border.all(color: AppTheme.successGreen.withValues(alpha: 0.15)),
-            ),
-            child: Icon(Icons.verified_user_outlined,
-                color: AppTheme.successGreen.withValues(alpha: 0.5), size: 44),
-          ),
-          const SizedBox(height: 24),
-          Text('No Alerts Triggered', style: AppTheme.headingSmall),
-          const SizedBox(height: 8),
+          Icon(Icons.history_rounded, size: 64, color: AppTheme.textMuted.withValues(alpha: 0.5)),
+          const SizedBox(height: 16),
           Text(
-            'All clear! No emergency alerts have\nbeen sent from this device',
-            textAlign: TextAlign.center,
-            style: AppTheme.bodyMedium,
+            'No emergency alerts recorded',
+            style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAlertList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: _alerts.length,
-      itemBuilder: (context, index) {
-        final alert = _alerts[index];
-        return _buildAlertCard(alert, index);
-      },
-    );
-  }
-
-  Widget _buildAlertCard(SosAlert alert, int index) {
-    final color = _alertTypeColor(alert.alertType);
-    final icon = _alertTypeIcon(alert.alertType);
-    final dateFormat = DateFormat('dd MMM yyyy');
-    final timeFormat = DateFormat('hh:mm:ss a');
+  Widget _buildAlertCard(SosAlert alert) {
+    final date = alert.timestamp;
+    final String timeStr = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    final String dateStr = '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      child: Row(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: AppTheme.glassDecoration(borderRadius: 20),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Timeline connector
-          Column(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color,
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-              ),
-              if (index < _alerts.length - 1)
-                Container(
-                  width: 2,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        color.withValues(alpha: 0.4),
-                        color.withValues(alpha: 0.05),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 14),
-
-          // Card
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: AppTheme.glassDecoration(
-                borderRadius: 16,
-                opacity: 0.06,
-                borderColor: color.withValues(alpha: 0.15),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  // Top row: type + status
-                  Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: color.withValues(alpha: 0.12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: color.withValues(alpha: 0.2),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Icon(icon, color: color, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${alert.alertType} Alert',
-                            style: AppTheme.bodyLarge.copyWith(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            dateFormat.format(alert.timestamp),
-                            style: AppTheme.bodySmall.copyWith(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: alert.status == 'sent'
-                              ? AppTheme.successGreen.withValues(alpha: 0.12)
-                              : AppTheme.textMuted.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: alert.status == 'sent'
-                                ? AppTheme.successGreen.withValues(alpha: 0.25)
-                                : AppTheme.textMuted.withValues(alpha: 0.25),
-                          ),
-                        ),
-                        child: Text(
-                          alert.status.toUpperCase(),
-                          style: AppTheme.bodySmall.copyWith(
-                            color: alert.status == 'sent'
-                                ? AppTheme.successGreen
-                                : AppTheme.textMuted,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.emergencyRed.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.warning_rounded, color: AppTheme.emergencyRed, size: 20),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  // Time + coordinates
-                  Row(
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: AppTheme.textMuted),
-                      const SizedBox(width: 6),
-                      Text(
-                        timeFormat.format(alert.timestamp),
-                        style: AppTheme.bodySmall.copyWith(fontSize: 12),
-                      ),
-                      const SizedBox(width: 16),
-                      Icon(Icons.location_on_outlined,
-                          size: 14, color: AppTheme.textMuted),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${alert.latitude.toStringAsFixed(4)}, ${alert.longitude.toStringAsFixed(4)}',
-                        style: AppTheme.bodySmall.copyWith(fontSize: 12),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Maps link button
-                  GestureDetector(
-                    onTap: () => _openMapsLink(alert.googleMapsLink),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryCyan.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: AppTheme.primaryCyan.withValues(alpha: 0.15)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.map_outlined,
-                              color: AppTheme.primaryCyan, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Open in Google Maps',
-                            style: AppTheme.bodySmall.copyWith(
-                              color: AppTheme.primaryCyan,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(Icons.open_in_new,
-                              color: AppTheme.primaryCyan.withValues(alpha: 0.6),
-                              size: 14),
-                        ],
-                      ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'SOS Alert',
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
-            ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    timeStr,
+                    style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    dateStr,
+                    style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on, color: AppTheme.primaryCyan, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${alert.latitude.toStringAsFixed(4)}, ${alert.longitude.toStringAsFixed(4)}',
+                  style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                alert.smsDeliveryStatus == 'sent'
+                    ? Icons.mark_email_read
+                    : Icons.error_outline,
+                color: alert.smsDeliveryStatus == 'sent'
+                    ? AppTheme.successGreen
+                    : (alert.smsDeliveryStatus == 'failed_no_provider'
+                        ? AppTheme.warningAmber
+                        : AppTheme.emergencyRed),
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  alert.smsDeliveryStatus == 'sent'
+                      ? 'SMS Delivered'
+                      : (alert.smsDeliveryStatus == 'failed_no_provider'
+                          ? 'SMS Not Sent (Provider missing)'
+                          : 'SMS Failed'),
+                  style: AppTheme.bodySmall.copyWith(
+                    color: alert.smsDeliveryStatus == 'sent'
+                        ? AppTheme.successGreen
+                        : (alert.smsDeliveryStatus == 'failed_no_provider'
+                            ? AppTheme.warningAmber
+                            : AppTheme.emergencyRed),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
-}
-
-// ── Particle Painter ──────────────────────────────────────────────────────
-class _ParticlePainter extends CustomPainter {
-  final double progress;
-  _ParticlePainter(this.progress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final random = Random(99);
-    final paint = Paint();
-
-    for (int i = 0; i < 45; i++) {
-      final x = random.nextDouble() * size.width;
-      final baseY = random.nextDouble() * size.height;
-      final speed = 0.15 + random.nextDouble() * 0.5;
-      final y = (baseY + progress * speed * size.height) % size.height;
-      final radius = 0.4 + random.nextDouble() * 1.0;
-      final opacity = 0.06 + random.nextDouble() * 0.2;
-
-      paint.color = (i % 7 == 0 ? AppTheme.primaryCyan : Colors.white)
-          .withValues(alpha: opacity);
-      canvas.drawCircle(Offset(x, y), radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ParticlePainter oldDelegate) =>
-      oldDelegate.progress != progress;
 }

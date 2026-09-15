@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/app_settings.dart';
 import '../services/settings_service.dart';
+import '../services/foreground_sensor_bridge.dart';
 import '../widgets/reusable_widgets.dart';
 
 class AiSettingsScreen extends StatefulWidget {
@@ -108,6 +109,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
                             child: Column(
                               children: [
                                 _buildSharingSection(),
+                                const SizedBox(height: 16),
+                                _buildAccidentDetectionSection(),
                                 const SizedBox(height: 16),
                                 _buildAutomationSection(),
                                 const SizedBox(height: 16),
@@ -217,6 +220,56 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
                 _updateSetting(_settings.copyWith(shareLiveLocation: v)),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Accident Detection Section ───────────────────────────────────────────
+
+  Widget _buildAccidentDetectionSection() {
+    return GestureDetector(
+      onLongPress: () {
+        // Safe test mode for diagnostic verification
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('Testing accident detection pipeline...'))
+        );
+        ForegroundSensorBridge.instance.simulateTestAccident();
+      },
+      child: GlassCard(
+        borderColor: AppTheme.emergencyRed.withValues(alpha: 0.15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: AppTheme.emergencyRed, size: 20),
+                const SizedBox(width: 8),
+                Text('ACCIDENT DETECTION',
+                    style: AppTheme.bodySmall.copyWith(
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.emergencyRed,
+                    )),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildToggle(
+              icon: Icons.car_crash_outlined,
+              title: 'Crash Detection',
+              subtitle: 'Monitor sensors to detect severe impacts (Requires background permission)',
+              value: _settings.accidentDetection,
+              color: AppTheme.emergencyRed,
+              onChanged: (v) {
+                _updateSetting(_settings.copyWith(accidentDetection: v));
+                if (v) {
+                  ForegroundSensorBridge.instance.start();
+                } else {
+                  ForegroundSensorBridge.instance.stop();
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

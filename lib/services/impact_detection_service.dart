@@ -56,13 +56,13 @@ typedef ImpactDetectedCallback = void Function(ImpactEvent event);
 /// 
 /// | Magnitude (m/s²) | What it means                     |
 /// |-------------------|-----------------------------------|
-/// | ~9.8              | Phone at rest (gravity only)      |
-/// | 10–15             | Normal walking, pocket movement   |
-/// | 15–25             | Vigorous shake, jogging           |
-/// | 25–40             | Hard drop, strong jerk            |
-/// | 40+               | Severe impact, potential crash    |
+/// | ~0                | Phone at rest (gravity removed)   |
+/// | 1–5               | Normal walking, pocket movement   |
+/// | 5–15              | Vigorous shake, jogging           |
+/// | 15–30             | Hard drop, strong jerk            |
+/// | 30+               | Severe impact, potential crash    |
 ///
-/// Default threshold is **40.0 m/s²** (~4G), high enough to ignore normal
+/// Default threshold is **30.0 m/s²** (~3G), high enough to ignore normal
 /// phone shaking, hand movement, and drops while still catching severe
 /// impacts indicative of a real crash or accident.
 ///
@@ -88,7 +88,7 @@ typedef ImpactDetectedCallback = void Function(ImpactEvent event);
 class ImpactDetectionService {
   ImpactDetectionService({
     AccelerometerService? accelerometerService,
-    this.impactThreshold = 40.0,
+    this.impactThreshold = 30.0,
     this.cooldownDuration = const Duration(seconds: 3),
     this.debugLogIntervalMs = 1000,
   }) : _accelerometerService = accelerometerService ?? AccelerometerService(
@@ -103,7 +103,7 @@ class ImpactDetectionService {
 
   /// Acceleration magnitude (m/s²) above which a sudden impact is detected.
   ///
-  /// Default 40.0 m/s² (~4G) — high enough to ignore normal phone shaking
+  /// Default 30.0 m/s² (~3G) — high enough to ignore normal phone shaking
   /// and everyday movement. Only severe impacts (crashes, collisions) exceed
   /// this threshold.
   final double impactThreshold;

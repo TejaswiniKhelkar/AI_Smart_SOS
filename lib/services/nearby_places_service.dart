@@ -23,6 +23,7 @@ class NearbyPlacesService {
 (
   nwr["amenity"="hospital"](around:$_searchRadiusMeters,$lat,$lng);
   nwr["amenity"="police"](around:$_searchRadiusMeters,$lat,$lng);
+  nwr["amenity"="fire_station"](around:$_searchRadiusMeters,$lat,$lng);
   nwr["emergency"="ambulance_station"](around:$_searchRadiusMeters,$lat,$lng);
 );
 out center;
@@ -78,6 +79,11 @@ out center;
         LatLng(placeLat, placeLng),
       );
 
+      // Enforce strict 20 km limit
+      if (distKm > 20.0) continue;
+
+      final isOpen = _determineIsOpen(tags, type);
+
       places.add(NearbyPlace(
         name: name,
         latitude: placeLat,
@@ -86,23 +92,55 @@ out center;
         distanceKm: distKm,
         address: address,
         phone: phone,
+        isOpen: isOpen,
       ));
     }
 
-    // Sort by distance (nearest first)
-    places.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+    // Sort by priority rules:
+    // 1. Currently OPEN services first
+    // 2. Then nearest distance
+    // 3. Emergency-service priority (Hospital > Ambulance > Police)
+    places.sort((a, b) {
+      final aOpen = a.isOpen == true ? 0 : (a.isOpen == false ? 2 : 1);
+      final bOpen = b.isOpen == true ? 0 : (b.isOpen == false ? 2 : 1);
+      
+      if (aOpen != bOpen) {
+        return aOpen.compareTo(bOpen);
+      }
+      
+      if ((a.distanceKm - b.distanceKm).abs() > 0.1) {
+        return a.distanceKm.compareTo(b.distanceKm);
+      }
+      
+      return a.priority.compareTo(b.priority);
+    });
+    
     return places;
   }
 
   static PlaceType _determineType(Map<String, dynamic> tags) {
     if (tags['amenity'] == 'hospital') return PlaceType.hospital;
     if (tags['amenity'] == 'police') return PlaceType.police;
+    if (tags['amenity'] == 'fire_station') return PlaceType.fire;
     return PlaceType.ambulance;
+  }
+
+  static bool? _determineIsOpen(Map<String, dynamic> tags, PlaceType type) {
+    final oh = tags['opening_hours']?.toString().toLowerCase();
+    if (oh != null) {
+      if (oh.contains('24/7')) return true;
+      if (oh.contains('off') || oh.contains('closed')) return false;
+      // Other complex patterns we leave as unknown
+    }
+    // Assume hospitals are almost always open 24/7 if not specified
+    if (type == PlaceType.hospital) return true;
+    return null;
   }
 
   static String _fallbackName(Map<String, dynamic> tags) {
     if (tags['amenity'] == 'hospital') return 'Hospital';
     if (tags['amenity'] == 'police') return 'Police Station';
+    if (tags['amenity'] == 'fire_station') return 'Fire Station';
     return 'Ambulance Station';
   }
 

@@ -10,6 +10,7 @@ import '../services/assistant_settings_service.dart';
 import '../services/profile_service.dart';
 import 'ai_profile_screen.dart';
 import 'emergency_contacts_screen.dart';
+import 'alert_history_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AI Emergency Command Center — Professional Dashboard Redesign
@@ -502,9 +503,7 @@ class _AiEmergencyDashboardScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: _buildDrawer(),
-      body: Container(
+    return Container(
         decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: SafeArea(
           child: FadeTransition(
@@ -540,7 +539,7 @@ class _AiEmergencyDashboardScreenState
                                   : _buildMobileLayout(),
                             ),
                             const SizedBox(height: 10),
-                            _buildQuickActions(),
+                            _buildEmergencyHistory(),
                           ],
                         );
                       },
@@ -551,7 +550,6 @@ class _AiEmergencyDashboardScreenState
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -582,32 +580,32 @@ class _AiEmergencyDashboardScreenState
             onTap: () =>
                 _showNearbyService(PlaceType.hospital, 'Nearby Hospitals'),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           _buildMiniServiceCard(
             icon: Icons.local_police,
             label: 'Police',
             count: _policeCount,
-            color: AppTheme.emergencyRed,
+            color: AppTheme.primaryCyan,
             onTap: () => _showNearbyService(
                 PlaceType.police, 'Nearby Police Stations'),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           _buildMiniServiceCard(
             icon: Icons.local_shipping,
             label: 'Ambulance',
             count: _ambulanceCount,
-            color: AppTheme.primaryCyan,
+            color: AppTheme.emergencyRed,
             onTap: () => _showNearbyService(
                 PlaceType.ambulance, 'Nearby Ambulances'),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           _buildMiniServiceCard(
-            icon: Icons.support_agent,
-            label: 'Rescue',
-            count: _rescueCount,
+            icon: Icons.local_fire_department,
+            label: 'Fire',
+            count: 0, // We can skip precise count or add it later
             color: AppTheme.warningAmber,
             onTap: () => _showNearbyService(
-                null, 'Nearby Emergency Services'),
+                PlaceType.fire, 'Nearby Fire Stations'),
           ),
         ],
       ),
@@ -1265,12 +1263,12 @@ class _AiEmergencyDashboardScreenState
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  QUICK ACTIONS BAR
+  //  EMERGENCY HISTORY
   // ══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildQuickActions() {
+  Widget _buildEmergencyHistory() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.surface.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
@@ -1278,88 +1276,39 @@ class _AiEmergencyDashboardScreenState
       ),
       child: Row(
         children: [
-          _buildQuickActionBtn(
-            icon: Icons.medical_services,
-            label: 'First Aid',
-            color: AppTheme.successGreen,
-            onTap: () => _sendMessage('Give first aid guidance'),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryCyan.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.history, color: AppTheme.primaryCyan, size: 20),
           ),
-          _buildQuickActionBtn(
-            icon: Icons.my_location,
-            label: 'Location',
-            color: AppTheme.primaryCyan,
-            onTap: _showCurrentLocation,
-          ),
-          _buildQuickActionBtn(
-            icon: Icons.contacts,
-            label: 'Contacts',
-            color: AppTheme.primaryCyanDark,
-            onTap: _openEmergencyContacts,
-          ),
-          _buildQuickActionBtn(
-            icon: Icons.badge_outlined,
-            label: 'Profile',
-            color: AppTheme.warningAmber,
-            onTap: _openMyProfile,
-          ),
-          _buildQuickActionBtn(
-            icon: Icons.sos,
-            label: 'SOS',
-            color: AppTheme.emergencyRed,
-            onTap: _showSosReminder,
-            isSos: true,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActionBtn({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-    bool isSos = false,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          decoration: BoxDecoration(
-            color: isSos
-                ? AppTheme.emergencyRed.withValues(alpha: 0.12)
-                : AppTheme.surface.withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSos
-                  ? AppTheme.emergencyRed.withValues(alpha: 0.3)
-                  : AppTheme.glassBorder,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Emergency History', style: AppTheme.headingSmall.copyWith(fontSize: 14)),
+                Text('View past alerts and logs', style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted, fontSize: 11)),
+              ],
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const SizedBox(height: 4),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 10)),
-            ],
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryCyan,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AlertHistoryScreen()));
+            },
+            child: Text('VIEW', style: AppTheme.bodySmall.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1368,184 +1317,6 @@ class _AiEmergencyDashboardScreenState
   //  HAMBURGER DRAWER
   // ══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildDrawer() {
-    return Drawer(
-      backgroundColor: AppTheme.surface,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Drawer header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.primaryCyan.withValues(alpha: 0.08),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      gradient: AppTheme.cyanGradient,
-                    ),
-                    child: const Icon(Icons.smart_toy_outlined,
-                        color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('AI Assistant',
-                          style: AppTheme.headingSmall.copyWith(fontSize: 16)),
-                      const SizedBox(height: 2),
-                      Text('Emergency Command Center',
-                          style: AppTheme.bodySmall
-                              .copyWith(color: AppTheme.textMuted, fontSize: 11)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: AppTheme.glassBorder),
-            // Menu items
-            ListTile(
-              leading: const Icon(Icons.chat_bubble_outline,
-                  color: AppTheme.primaryCyan),
-              title:
-                  Text('AI Assistant', style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary)),
-              onTap: () => Navigator.pop(context),
-            ),
-            const Divider(height: 1, color: AppTheme.glassBorder),
-            ExpansionTile(
-              leading:
-                  const Icon(Icons.language, color: AppTheme.primaryCyan),
-              title: Text('Language',
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary)),
-              iconColor: AppTheme.textMuted,
-              collapsedIconColor: AppTheme.textMuted,
-              children: [
-                _drawerRadio('English', 'en', _assistantLanguage,
-                    (v) async {
-                  await AssistantSettingsService.setLanguage(v);
-                  if (mounted) setState(() => _assistantLanguage = v);
-                }),
-                _drawerRadio('Hindi', 'hi', _assistantLanguage, (v) async {
-                  await AssistantSettingsService.setLanguage(v);
-                  if (mounted) setState(() => _assistantLanguage = v);
-                }),
-                _drawerRadio('Marathi', 'mr', _assistantLanguage,
-                    (v) async {
-                  await AssistantSettingsService.setLanguage(v);
-                  if (mounted) setState(() => _assistantLanguage = v);
-                }),
-              ],
-            ),
-            ExpansionTile(
-              leading:
-                  const Icon(Icons.palette, color: AppTheme.primaryCyan),
-              title: Text('Theme',
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary)),
-              iconColor: AppTheme.textMuted,
-              collapsedIconColor: AppTheme.textMuted,
-              children: [
-                _drawerRadio('Light', 'light', _assistantTheme,
-                    (v) async {
-                  await AssistantSettingsService.setTheme(v);
-                  if (mounted) setState(() => _assistantTheme = v);
-                }),
-                _drawerRadio('Dark', 'dark', _assistantTheme, (v) async {
-                  await AssistantSettingsService.setTheme(v);
-                  if (mounted) setState(() => _assistantTheme = v);
-                }),
-                _drawerRadio('System', 'system', _assistantTheme,
-                    (v) async {
-                  await AssistantSettingsService.setTheme(v);
-                  if (mounted) setState(() => _assistantTheme = v);
-                }),
-              ],
-            ),
-            const Divider(height: 1, color: AppTheme.glassBorder),
-            ListTile(
-              leading: const Icon(Icons.add, color: AppTheme.primaryCyan),
-              title: Text('New Chat',
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary)),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  _messages.clear();
-                  _messages.add(_ChatMessage(
-                    role: _MessageRole.ai,
-                    text:
-                        'Hello. I am your AI Emergency Assistant. I can help with first-aid guidance, accident response, nearby help, and what information to share. If this is life-threatening, please use the SOS button or call emergency services immediately.',
-                  ));
-                  _lastFailedMessage = null;
-                });
-              },
-            ),
-            ListTile(
-              leading:
-                  const Icon(Icons.delete, color: AppTheme.emergencyRed),
-              title: Text('Clear Chat',
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary)),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  _messages.clear();
-                  _messages.add(_ChatMessage(
-                    role: _MessageRole.ai,
-                    text:
-                        'Hello. I am your AI Emergency Assistant. I can help with first-aid guidance, accident response, nearby help, and what information to share. If this is life-threatening, please use the SOS button or call emergency services immediately.',
-                  ));
-                  _lastFailedMessage = null;
-                });
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.info_outline,
-                  color: AppTheme.primaryCyan),
-              title: Text('Emergency Assistant Info',
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary)),
-              onTap: () {
-                Navigator.pop(context);
-                showAboutDialog(
-                  context: context,
-                  applicationName: 'AI Emergency Assistant',
-                  children: const [
-                    Text(
-                        'This assistant provides short, actionable emergency guidance. It does not replace professional help.'),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _drawerRadio(
-      String label, String value, String groupValue, Function(String) onChanged) {
-    return RadioListTile<String>(
-      value: value,
-      groupValue: groupValue,
-      title: Text(label,
-          style: AppTheme.bodySmall.copyWith(color: AppTheme.textPrimary)),
-      activeColor: AppTheme.primaryCyan,
-      onChanged: (v) {
-        if (v != null) onChanged(v);
-      },
-    );
-  }
 }
 
 // ── Chat models ───────────────────────────────────────────────────────────

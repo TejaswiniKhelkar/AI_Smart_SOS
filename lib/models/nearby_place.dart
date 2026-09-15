@@ -1,5 +1,5 @@
 /// Type of emergency service place.
-enum PlaceType { hospital, police, ambulance }
+enum PlaceType { hospital, police, ambulance, fire }
 
 /// Represents a nearby emergency service location.
 class NearbyPlace {
@@ -10,6 +10,7 @@ class NearbyPlace {
   final double distanceKm;
   final String? address;
   final String? phone;
+  final bool? isOpen;
 
   NearbyPlace({
     required this.name,
@@ -19,7 +20,22 @@ class NearbyPlace {
     required this.distanceKm,
     this.address,
     this.phone,
+    this.isOpen,
   });
+
+  /// Priority for sorting: Hospital (1), Ambulance (2), Police (3).
+  int get priority {
+    switch (type) {
+      case PlaceType.hospital:
+        return 1;
+      case PlaceType.ambulance:
+        return 2;
+      case PlaceType.police:
+        return 3;
+      case PlaceType.fire:
+        return 4;
+    }
+  }
 
   /// Human-readable distance string.
   String get distanceText {

@@ -33,6 +33,7 @@ class AppSettings {
   final bool notificationSound;
   final String emergencyLanguage;
   final AlertRecipientMode alertRecipientMode;
+  final bool accidentDetection;
 
   AppSettings({
     this.shareBloodGroup = true,
@@ -46,6 +47,7 @@ class AppSettings {
     this.notificationSound = true,
     this.emergencyLanguage = 'English',
     this.alertRecipientMode = AlertRecipientMode.allContacts,
+    this.accidentDetection = false,
   });
 
   AppSettings copyWith({
@@ -60,6 +62,7 @@ class AppSettings {
     bool? notificationSound,
     String? emergencyLanguage,
     AlertRecipientMode? alertRecipientMode,
+    bool? accidentDetection,
   }) {
     return AppSettings(
       shareBloodGroup: shareBloodGroup ?? this.shareBloodGroup,
@@ -73,6 +76,7 @@ class AppSettings {
       notificationSound: notificationSound ?? this.notificationSound,
       emergencyLanguage: emergencyLanguage ?? this.emergencyLanguage,
       alertRecipientMode: alertRecipientMode ?? this.alertRecipientMode,
+      accidentDetection: accidentDetection ?? this.accidentDetection,
     );
   }
 
@@ -88,6 +92,7 @@ class AppSettings {
         'notificationSound': notificationSound,
         'emergencyLanguage': emergencyLanguage,
         'alertRecipientMode': alertRecipientMode.index,
+        'accidentDetection': accidentDetection,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -105,6 +110,7 @@ class AppSettings {
       alertRecipientMode: AlertRecipientMode.values[
           (json['alertRecipientMode'] as int?) ??
               AlertRecipientMode.allContacts.index],
+      accidentDetection: json['accidentDetection'] as bool? ?? false,
     );
   }
 

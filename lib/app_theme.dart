@@ -1,100 +1,111 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// AI Smart SOS — Futuristic Dark Emergency Theme System
+/// AI Smart SOS — Clean Professional Light Emergency Theme System
 class AppTheme {
   AppTheme._();
 
   // ── Core Palette ──────────────────────────────────────────────────────
-  static const Color background = Color(0xFF0A0E21);
-  static const Color surface = Color(0xFF1A1F36);
-  static const Color surfaceLight = Color(0xFF242B4A);
-  static const Color primaryCyan = Color(0xFF00E5FF);
-  static const Color primaryCyanDark = Color(0xFF00B8D4);
-  static const Color emergencyRed = Color(0xFFFF1744);
-  static const Color emergencyRedDark = Color(0xFFD50000);
-  static const Color warningAmber = Color(0xFFFFAB00);
-  static const Color successGreen = Color(0xFF00E676);
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0BEC5);
-  static const Color textMuted = Color(0xFF546E7A);
-  static const Color glassWhite = Color(0x1AFFFFFF);
-  static const Color glassBorder = Color(0x33FFFFFF);
+  static const Color background = Color(0xFFF7F9FC); // Light gray background
+  static const Color surface = Color(0xFFFFFFFF); // White cards
+  static const Color surfaceLight = Color(0xFFF0F4F8);
+  
+  // Service icons / Action color
+  static const Color primaryCyan = Color(0xFF2563EB); // Blue for service icons
+  static const Color primaryCyanDark = Color(0xFF1D4ED8);
+  
+  // Emergency / SOS
+  static const Color emergencyRed = Color(0xFFFF4B4B); // Coral/Red
+  static const Color emergencyRedDark = Color(0xFFDC2626);
+  
+  static const Color warningAmber = Color(0xFFF59E0B);
+  
+  // Safe / Protected
+  static const Color successGreen = Color(0xFF10B981);
+  
+  // Typography
+  static const Color textPrimary = Color(0xFF0F172A); // Dark slate
+  static const Color textSecondary = Color(0xFF334155);
+  static const Color textMuted = Color(0xFF64748B);
+  
+  // Glass / Borders
+  static const Color glassWhite = Color(0xE6FFFFFF);
+  static const Color glassBorder = Color(0xFFE2E8F0); // Subtle light border
 
   // ── Gradients ─────────────────────────────────────────────────────────
   static const LinearGradient cyanGradient = LinearGradient(
-    colors: [primaryCyan, Color(0xFF0288D1)],
+    colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient redGradient = LinearGradient(
-    colors: [emergencyRed, Color(0xFFFF6D00)],
+    colors: [Color(0xFFFF4B4B), Color(0xFFF43F5E)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFF0A0E21), Color(0xFF141B3D), Color(0xFF0A0E21)],
+    colors: [Color(0xFFF7F9FC), Color(0xFFF1F5F9), Color(0xFFF7F9FC)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   // ── Text Styles ───────────────────────────────────────────────────────
-  static TextStyle headingLarge = GoogleFonts.orbitron(
+  static TextStyle headingLarge = GoogleFonts.inter(
     fontSize: 32,
+    fontWeight: FontWeight.w800,
+    color: textPrimary,
+    letterSpacing: -0.5,
+  );
+
+  static TextStyle headingMedium = GoogleFonts.inter(
+    fontSize: 22,
     fontWeight: FontWeight.w700,
     color: textPrimary,
-    letterSpacing: 3,
+    letterSpacing: -0.25,
   );
 
-  static TextStyle headingMedium = GoogleFonts.orbitron(
-    fontSize: 22,
-    fontWeight: FontWeight.w600,
-    color: textPrimary,
-    letterSpacing: 2,
-  );
-
-  static TextStyle headingSmall = GoogleFonts.orbitron(
+  static TextStyle headingSmall = GoogleFonts.inter(
     fontSize: 16,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w700,
     color: textPrimary,
-    letterSpacing: 1.5,
+    letterSpacing: 0,
   );
 
-  static TextStyle bodyLarge = GoogleFonts.rajdhani(
+  static TextStyle bodyLarge = GoogleFonts.inter(
     fontSize: 18,
     fontWeight: FontWeight.w500,
     color: textSecondary,
   );
 
-  static TextStyle bodyMedium = GoogleFonts.rajdhani(
+  static TextStyle bodyMedium = GoogleFonts.inter(
     fontSize: 16,
     fontWeight: FontWeight.w500,
     color: textSecondary,
   );
 
-  static TextStyle bodySmall = GoogleFonts.rajdhani(
+  static TextStyle bodySmall = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: textMuted,
   );
 
-  static TextStyle buttonText = GoogleFonts.rajdhani(
-    fontSize: 18,
+  static TextStyle buttonText = GoogleFonts.inter(
+    fontSize: 16,
     fontWeight: FontWeight.w700,
-    color: textPrimary,
-    letterSpacing: 2,
+    color: Colors.white,
+    letterSpacing: 0.5,
   );
 
-  // ── Glassmorphism Decoration ──────────────────────────────────────────
+  // ── Glassmorphism / Card Decoration ───────────────────────────────────
   static BoxDecoration glassDecoration({
     double borderRadius = 20,
     Color? borderColor,
-    double opacity = 0.1,
+    double opacity = 1.0, // Mostly solid white cards for light theme
   }) {
     return BoxDecoration(
-      color: Colors.white.withValues(alpha: opacity),
+      color: surface.withValues(alpha: opacity),
       borderRadius: BorderRadius.circular(borderRadius),
       border: Border.all(
         color: borderColor ?? glassBorder,
@@ -102,26 +113,23 @@ class AppTheme {
       ),
       boxShadow: [
         BoxShadow(
-          color: primaryCyan.withValues(alpha: 0.05),
-          blurRadius: 20,
-          spreadRadius: 2,
+          color: const Color(0xFF0F172A).withValues(alpha: 0.04), // Soft shadow
+          blurRadius: 16,
+          spreadRadius: 0,
+          offset: const Offset(0, 4),
         ),
       ],
     );
   }
 
-  // ── Neon Glow Box Shadow ──────────────────────────────────────────────
+  // ── Glow / Shadow ─────────────────────────────────────────────────────
   static List<BoxShadow> neonGlow(Color color, {double intensity = 1.0}) {
     return [
       BoxShadow(
-        color: color.withValues(alpha: 0.3 * intensity),
-        blurRadius: 15,
+        color: color.withValues(alpha: 0.2 * intensity),
+        blurRadius: 16,
         spreadRadius: 2,
-      ),
-      BoxShadow(
-        color: color.withValues(alpha: 0.15 * intensity),
-        blurRadius: 40,
-        spreadRadius: 5,
+        offset: const Offset(0, 6),
       ),
     ];
   }
@@ -138,7 +146,7 @@ class AppTheme {
       prefixIcon: Icon(icon, color: primaryCyan, size: 22),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: surface.withValues(alpha: 0.8),
+      fillColor: surfaceLight,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -156,15 +164,19 @@ class AppTheme {
   }
 
   // ── MaterialApp ThemeData ─────────────────────────────────────────────
-  static ThemeData get darkTheme {
+  // Keeping the name 'darkTheme' to avoid breaking main.dart right now, 
+  // but it actually returns a light theme. Better yet, we can rename it and fix main.dart.
+  // Let's provide both and fix main.dart.
+  static ThemeData get lightTheme {
     return ThemeData(
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       scaffoldBackgroundColor: background,
       primaryColor: primaryCyan,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: const ColorScheme.light(
         primary: primaryCyan,
         secondary: emergencyRed,
         surface: surface,
+        error: emergencyRed,
       ),
       textTheme: TextTheme(
         headlineLarge: headingLarge,
@@ -177,11 +189,13 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        titleTextStyle: headingSmall,
+        centerTitle: true,
+        titleTextStyle: headingMedium,
+        iconTheme: const IconThemeData(color: primaryCyan),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surface.withValues(alpha: 0.8),
+        fillColor: surfaceLight,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: glassBorder),
@@ -189,4 +203,7 @@ class AppTheme {
       ),
     );
   }
+  
+  // Legacy getter so things don't immediately break if we miss one
+  static ThemeData get darkTheme => lightTheme;
 }

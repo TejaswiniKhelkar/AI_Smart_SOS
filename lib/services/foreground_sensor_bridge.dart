@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'accelerometer_service.dart';
 import 'gyroscope_service.dart';
 
@@ -15,7 +16,8 @@ import 'gyroscope_service.dart';
 ///
 /// On web and non-Android platforms all operations are no-ops.
 class ForegroundSensorBridge {
-  ForegroundSensorBridge();
+  static final ForegroundSensorBridge instance = ForegroundSensorBridge._internal();
+  ForegroundSensorBridge._internal();
 
   static const _channel =
       MethodChannel('com.example.ai_smart_sos/foreground_sensor');
@@ -57,6 +59,16 @@ class ForegroundSensorBridge {
         onAccidentDetected?.call();
       }
     });
+
+    // Request POST_NOTIFICATIONS permission for Android 13+
+    // Required to ensure the foreground service notification and lock-screen full-screen intents appear.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final status = await Permission.notification.request();
+      if (status.isDenied) {
+        debugPrint('[FgSensorBridge] Notification permission denied. '
+            'Background service might not be able to show alerts.');
+      }
+    }
 
     // Start the native foreground service
     try {
@@ -113,4 +125,17 @@ class ForegroundSensorBridge {
   }
 
 
+  /// Diagnostic method to simulate a crash event safely without throwing the phone.
+  Future<void> simulateTestAccident() async {
+    if (!_serviceRunning) {
+      debugPrint('[FgSensorBridge] Service not running. Cannot test.');
+      return;
+    }
+    try {
+      await _channel.invokeMethod<bool>('simulateTestAccident');
+      debugPrint('[FgSensorBridge] Native crash simulation triggered.');
+    } catch (e) {
+      debugPrint('[FgSensorBridge] Failed to simulate accident: $e');
+    }
+  }
 }

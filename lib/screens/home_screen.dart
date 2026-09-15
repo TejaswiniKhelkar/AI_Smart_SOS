@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'package:geolocator/geolocator.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
@@ -7,23 +5,22 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
-import '../services/auth_service.dart';
-import 'login_screen.dart';
 import '../models/sos_alert.dart';
-import '../models/nearby_place.dart';
 import '../services/location_service.dart';
 import '../services/alert_service.dart';
 import '../services/contact_service.dart';
 import '../services/nearby_places_service.dart';
-import 'ai_emergency_dashboard_screen.dart';
+import '../services/sms_service.dart';
+import '../models/nearby_place.dart';
 import 'emergency_contacts_screen.dart';
+import 'nearby_services_screen.dart';
 import 'alert_history_screen.dart';
 import 'accident_alert_dialog.dart';
-import '../services/accident_detection_service.dart';
-
+import 'ai_emergency_dashboard_screen.dart';
+import 'ai_profile_screen.dart';
 import '../services/foreground_sensor_bridge.dart';
-import '../services/location_tracking_service.dart';
-import 'user_profile_screen.dart';
+import '../services/settings_service.dart';
+import '../widgets/global_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -38,11 +35,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: GlobalDrawer(
+        onTabSelected: (index) {
+          setState(() {
+            _currentTab = index;
+          });
+        },
+      ),
       body: IndexedStack(
         index: _currentTab,
         children: const [
           _HomeBody(),
-          EmergencyContactsScreen(),
+          AiEmergencyDashboardScreen(),
+          AiProfileScreen(),
           AlertHistoryScreen(),
         ],
       ),
@@ -78,16 +83,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 index: 0,
               ),
               _buildNavItem(
-                icon: Icons.contacts_outlined,
-                activeIcon: Icons.contacts,
-                label: 'Contacts',
+                icon: Icons.chat_bubble_outline,
+                activeIcon: Icons.chat_bubble,
+                label: 'AI Chat',
                 index: 1,
+              ),
+              _buildNavItem(
+                icon: Icons.person_outline,
+                activeIcon: Icons.person,
+                label: 'Profile',
+                index: 2,
               ),
               _buildNavItem(
                 icon: Icons.history_outlined,
                 activeIcon: Icons.history,
                 label: 'History',
-                index: 2,
+                index: 3,
               ),
             ],
           ),
@@ -142,10 +153,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// HOME BODY — The original home screen content, unchanged visually,
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+// HOME BODY ΓÇö The original home screen content, unchanged visually,
 // but with real SOS logic wired in.
-// ═══════════════════════════════════════════════════════════════════════════
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
 class _HomeBody extends StatefulWidget {
   const _HomeBody();
@@ -154,8 +165,25 @@ class _HomeBody extends StatefulWidget {
   State<_HomeBody> createState() => _HomeBodyState();
 }
 
-class _HomeBodyState extends State<_HomeBody>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
+  List<dynamic> _contacts = [];
+  bool _loadingContacts = true;
+
+  Future<void> _fetchContacts() async {
+    try {
+      // dynamic to avoid import issues if Contact is not imported
+      final contacts = await ContactService.getContacts();
+      if (mounted) {
+        setState(() {
+          _contacts = contacts;
+          _loadingContacts = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loadingContacts = false);
+    }
+  }
+
   late AnimationController _sosController;
   late Animation<double> _sosPulse;
   late AnimationController _rippleController;
@@ -172,53 +200,16 @@ class _HomeBodyState extends State<_HomeBody>
   double? _currentLng;
   final MapController _mapController = MapController();
 
-  // Nearby emergency places
   List<NearbyPlace> _nearbyPlaces = [];
-  bool _loadingPlaces = false;
-  NearbyPlace? _selectedPlace;
-  bool _refreshingLocation = false;
-  PlaceType? _placeFilter;
-  String _placeSearchQuery = '';
-  final TextEditingController _placeSearchController = TextEditingController();
+  bool _loadingPlaces = true;
+  String _nearbyError = '';
 
-  // Accident detection (simple threshold — existing)
-  late final AccidentDetectionService _accidentService;
+  // Accident detection
   bool _accidentDialogShowing = false;
-
-  /// Tracks whether the most recent AccidentAlertDialog was opened by
-  /// the high-confidence sensor detector (true) vs the simple detector
-  /// or manual test button (false). Used for targeted debug logging.
-  bool _autoTriggerActive = false;
-
-  // Foreground service bridge for background sensor monitoring
-  final ForegroundSensorBridge _sensorBridge = ForegroundSensorBridge();
-
-  /// Set to `true` when a high-confidence accident is detected while
-  /// the app is in the background. The pending trigger is consumed
-  /// when the app returns to the foreground (via lifecycle callback).
-  bool _pendingAccidentTrigger = false;
-
-  // Continuous location tracking
-  final LocationTrackingService _locationTracker = LocationTrackingService();
-
-  late final MapOptions _mapOptions;
 
   @override
   void initState() {
     super.initState();
-
-    _mapOptions = MapOptions(
-      initialCenter: const LatLng(20.5937, 78.9629),
-      initialZoom: 4.0,
-      interactionOptions: const InteractionOptions(
-        flags: InteractiveFlag.all,
-      ),
-      onTap: (_, _) {
-        if (_selectedPlace != null) {
-          setState(() => _selectedPlace = null);
-        }
-      },
-    );
 
     // SOS button pulse
     _sosController = AnimationController(
@@ -257,126 +248,49 @@ class _HomeBodyState extends State<_HomeBody>
     // Fetch initial location
     _fetchLocation();
 
-    // Start continuous location tracking (updates _locationTracker.latestLocation)
-    _startLocationTracking();
-
-    // Start accident detection (simple threshold — existing)
-    _accidentService = AccidentDetectionService();
-    _accidentService.startListening(
-      onAccidentDetected: _onAccidentDetected,
-    );
-
-    // Setup foreground service bridge to listen for background detection
-    _sensorBridge.onAccidentDetected = () {
-      debugPrint('[SOS-AutoTrigger] Received accident intent from background service!');
-      _autoTriggerActive = true;
-      _onAccidentDetected();
-    };
-    
-    // Start the foreground service so the background isolate handles accident detection
-    _sensorBridge.start();
-
-    // Register for app lifecycle changes
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  // ── App lifecycle (for background accident detection) ────────────────
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _pendingAccidentTrigger) {
-      _pendingAccidentTrigger = false;
-      debugPrint('[SOS-AutoTrigger] App RESUMED with pending accident — '
-          'showing AccidentAlertDialog now.');
-      _autoTriggerActive = true;
-      // Small delay to let the UI fully settle after resume
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted && !_accidentDialogShowing) {
-          _onAccidentDetected();
-        }
-      });
-    }
+    // Start accident detection if enabled in settings
+    ForegroundSensorBridge.instance.onAccidentDetected = _onAccidentDetected;
+    SettingsService.getSettings().then((settings) {
+      if (settings.accidentDetection && mounted) {
+        ForegroundSensorBridge.instance.start();
+      }
+    });
   }
 
   void _onAccidentDetected() {
     if (!mounted || _accidentDialogShowing) return;
     _accidentDialogShowing = true;
-
-    // Dismiss the native accident alert notification (if it was shown
-    // to bring the app to the foreground from the background).
-    _sensorBridge.dismissAccidentAlertNotification();
-
-    final wasAutoTrigger = _autoTriggerActive;
-    if (wasAutoTrigger) {
-      debugPrint('[SOS-AutoTrigger] AccidentAlertDialog OPENED — '
-          'source: high-confidence sensor detection. '
-          '30s countdown started.');
-    }
-
+    ForegroundSensorBridge.instance.dismissAccidentAlertNotification();
     AccidentAlertDialog.show(context, onSendSOS: _triggerSOS).then((_) {
       _accidentDialogShowing = false;
-
-      // Reset the simple detector cooldown (existing behaviour)
-      _accidentService.resetCooldown();
-
-      if (wasAutoTrigger) {
-        // Distinguish between SOS-sent vs cancelled.
-        // _sosPressed is set to true by _triggerSOS when SOS is actually sent.
-        final sosSent = _sosPressed;
-        if (sosSent) {
-          debugPrint('');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('[SOS-AutoTrigger] ✅ AUTO-SOS COMPLETED SUCCESSFULLY');
-          debugPrint('[SOS-AutoTrigger]   Flow: sensor → high-confidence → '
-              '30s countdown → SOS sent');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('');
-        } else {
-          debugPrint('');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('[SOS-AutoTrigger] 🟢 AUTO-SOS CANCELLED (user is safe)');
-          debugPrint('[SOS-AutoTrigger]   User tapped "I\'m Safe" — '
-              'no SOS sent.');
-          debugPrint('[SOS-AutoTrigger] ═══════════════════════════════════════');
-          debugPrint('');
-        }
-      }
-
-      _autoTriggerActive = false;
     });
   }
 
-
-
   @override
   void dispose() {
-    // Remove lifecycle observer
-    WidgetsBinding.instance.removeObserver(this);
-
-    // Stop foreground service bridge
-    _sensorBridge.stop();
-
-    _locationTracker.stopTracking();
-    _accidentService.stopListening();
+    ForegroundSensorBridge.instance.onAccidentDetected = null;
     _sosController.dispose();
     _rippleController.dispose();
     _particleController.dispose();
     _statusController.dispose();
-    _placeSearchController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchLocation() async {
     try {
       final data = await LocationService.getLocationData();
+      final address = await LocationService.getAddressFromCoordinates(data.latitude, data.longitude);
+
       if (mounted) {
         setState(() {
           _gpsCoords =
-              '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
-          _locationText = 'Live location active';
+              '${data.latitude.toStringAsFixed(4)}┬░, ${data.longitude.toStringAsFixed(4)}┬░';
+          _locationText = address ?? 'Live location active';
           _currentLat = data.latitude;
           _currentLng = data.longitude;
         });
+
+        _fetchNearbyPlaces(data.latitude, data.longitude);
 
         // Move map camera to user's current location
         try {
@@ -387,107 +301,24 @@ class _HomeBodyState extends State<_HomeBody>
         } catch (_) {
           // MapController may not be ready yet on first build
         }
-
-        // Fetch nearby emergency places
-        _fetchNearbyPlaces(data.latitude, data.longitude);
-      }
-    } on SosLocationPermissionException catch (e) {
-      if (mounted) {
-        setState(() {
-          _gpsCoords = 'Permission denied';
-          _locationText = 'Location permission required';
-        });
-        _showLocationSettingsSnackbar(
-          e.message,
-          isPermission: true,
-        );
-      }
-    } on SosLocationServiceException catch (e) {
-      if (mounted) {
-        setState(() {
-          _gpsCoords = 'GPS Off';
-          _locationText = 'Enable GPS in device settings';
-        });
-        _showLocationSettingsSnackbar(
-          e.message,
-          isPermission: false,
-        );
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _gpsCoords = 'GPS Active';
-          _locationText = e.toString();
+          _gpsCoords = 'Location Unavailable';
+          _locationText = e is LocationException 
+              ? e.message 
+              : 'Unable to get your location. Please check GPS and try again.';
+          _loadingPlaces = false;
+          _nearbyError = 'Location required for nearby services';
         });
       }
-    }
-  }
-
-  /// Starts continuous background location tracking via [LocationTrackingService].
-  ///
-  /// Each new position update refreshes the on-screen coordinates, map camera,
-  /// and keeps [_locationTracker.latestLocation] available for the SOS workflow.
-  /// Permission/GPS errors are caught once and shown via snackbar — no repeated
-  /// popups because the service itself guards against duplicate streams.
-  Future<void> _startLocationTracking() async {
-    try {
-      await _locationTracker.startTracking(
-        onUpdate: (locationData) {
-          if (!mounted) return;
-          setState(() {
-            _currentLat = locationData.latitude;
-            _currentLng = locationData.longitude;
-            _gpsCoords =
-                '${locationData.latitude.toStringAsFixed(4)}°, '
-                '${locationData.longitude.toStringAsFixed(4)}°';
-            _locationText = 'Live location active';
-          });
-
-          // Keep map camera centred on the latest position
-          try {
-            _mapController.move(
-              LatLng(locationData.latitude, locationData.longitude),
-              _mapController.camera.zoom, // preserve current zoom
-            );
-          } catch (_) {
-            // MapController may not be ready on first frames
-          }
-        },
-      );
-    } on SosLocationPermissionException catch (e) {
-      if (mounted) {
-        setState(() => _locationText = 'Location permission required');
-        _showLocationSettingsSnackbar(e.message, isPermission: true);
-      }
-    } on SosLocationServiceException catch (e) {
-      if (mounted) {
-        setState(() => _locationText = 'Enable GPS in device settings');
-        _showLocationSettingsSnackbar(e.message, isPermission: false);
-      }
-    } on LocationException catch (e) {
-      if (mounted) {
-        _showErrorSnackbar(e.message);
-        setState(() {
-          _locationText = e.message;
-        });
-      }
-    } catch (e) {
-      // Silently log non-critical errors (e.g. web/unsupported platform)
-      debugPrint('[LocationTracking] Could not start tracking: $e');
     }
   }
 
   Future<void> _fetchNearbyPlaces(double lat, double lng) async {
-    if (_loadingPlaces) return;
-    setState(() {
-      _loadingPlaces = true;
-      _nearbyPlaces = [];
-    });
-
     try {
-      debugPrint('[SOS] Fetching nearby places at $lat, $lng ...');
       final places = await NearbyPlacesService.fetchNearbyPlaces(lat, lng);
-      debugPrint('[SOS] Found ${places.length} nearby places');
       if (mounted) {
         setState(() {
           _nearbyPlaces = places;
@@ -495,29 +326,16 @@ class _HomeBodyState extends State<_HomeBody>
         });
       }
     } catch (e) {
-      debugPrint('[SOS] Error fetching nearby places: $e');
-      _showErrorSnackbar(e.toString());
       if (mounted) {
-        setState(() => _loadingPlaces = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not load nearby places. Tap refresh to retry.',
-              style: AppTheme.bodySmall.copyWith(color: Colors.white),
-            ),
-            backgroundColor: AppTheme.warningAmber,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            action: SnackBarAction(
-              label: 'RETRY',
-              textColor: Colors.white,
-              onPressed: () => _fetchNearbyPlaces(lat, lng),
-            ),
-          ),
-        );
+        setState(() {
+          _loadingPlaces = false;
+          _nearbyError = 'Failed to load nearby services';
+        });
       }
     }
   }
+
+
 
   Future<void> _triggerSOS() async {
     if (_isSending) return;
@@ -537,6 +355,18 @@ class _HomeBodyState extends State<_HomeBody>
       final data = await LocationService.getLocationData();
       final contacts = await ContactService.getContacts();
 
+      // Send SMS via Backend
+      String smsStatus = 'pending';
+      try {
+        smsStatus = await SmsService.sendEmergencySMS(
+          latitude: data.latitude,
+          longitude: data.longitude,
+          googleMapsLink: data.googleMapsLink,
+        );
+      } catch (e) {
+        smsStatus = 'failed';
+      }
+
       // Save alert to history
       final alert = SosAlert(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -545,18 +375,19 @@ class _HomeBodyState extends State<_HomeBody>
         longitude: data.longitude,
         googleMapsLink: data.googleMapsLink,
         alertType: 'SOS',
+        smsDeliveryStatus: smsStatus,
       );
       await AlertService.saveAlert(alert);
 
       // Update location display
       setState(() {
         _gpsCoords =
-            '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
+            '${data.latitude.toStringAsFixed(4)}┬░, ${data.longitude.toStringAsFixed(4)}┬░';
         _locationText = 'Live location active';
       });
 
       if (mounted) {
-        _showSOSConfirmation(data, contacts.length);
+        _showSOSConfirmation(data, contacts.length, smsStatus);
       }
     } on LocationException catch (e) {
       if (mounted) {
@@ -580,6 +411,18 @@ class _HomeBodyState extends State<_HomeBody>
     try {
       final data = await LocationService.getLocationData();
 
+      // Send SMS via Backend
+      String smsStatus = 'pending';
+      try {
+        smsStatus = await SmsService.sendEmergencySMS(
+          latitude: data.latitude,
+          longitude: data.longitude,
+          googleMapsLink: data.googleMapsLink,
+        );
+      } catch (e) {
+        smsStatus = 'failed';
+      }
+
       final alert = SosAlert(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         timestamp: DateTime.now(),
@@ -587,6 +430,7 @@ class _HomeBodyState extends State<_HomeBody>
         longitude: data.longitude,
         googleMapsLink: data.googleMapsLink,
         alertType: type,
+        smsDeliveryStatus: smsStatus,
       );
       await AlertService.saveAlert(alert);
 
@@ -596,14 +440,7 @@ class _HomeBodyState extends State<_HomeBody>
       });
 
       if (mounted) {
-        final message = '🚨 $type EMERGENCY!\n\n'
-            'I need immediate $type assistance!\n\n'
-            '📍 My live location:\n${data.googleMapsLink}\n\n'
-            'Coordinates: ${data.latitude.toStringAsFixed(6)}, ${data.longitude.toStringAsFixed(6)}\n\n'
-            '⏰ Time: ${DateTime.now().toString().substring(0, 19)}\n\n'
-            'Sent via AI Smart SOS';
-
-        await Share.share(message);
+        _showSOSConfirmation(data, 0, smsStatus);
       }
     } on LocationException catch (e) {
       if (mounted) _showErrorSnackbar(e.message);
@@ -614,7 +451,7 @@ class _HomeBodyState extends State<_HomeBody>
     }
   }
 
-  void _showSOSConfirmation(LocationData data, int contactCount) {
+  void _showSOSConfirmation(LocationData data, int contactCount, String smsStatus) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -661,10 +498,24 @@ class _HomeBodyState extends State<_HomeBody>
               const SizedBox(height: 16),
               Text('SOS ALERT LOGGED', style: AppTheme.headingSmall),
               const SizedBox(height: 8),
-              Text(
-                'Your location has been captured',
-                style: AppTheme.bodyMedium,
-              ),
+              
+              if (smsStatus == 'sent')
+                Text(
+                  'Alert sent to $contactCount emergency contacts.',
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.successGreen),
+                )
+              else if (smsStatus == 'failed_no_provider')
+                Text(
+                  'Alert logged locally.\nSMS Not Sent: Provider credentials missing in backend.',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.warningAmber),
+                )
+              else
+                Text(
+                  'Alert logged locally.\nSMS delivery failed.',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.emergencyRed),
+                ),
               const SizedBox(height: 20),
 
               // Location info card
@@ -748,11 +599,11 @@ class _HomeBodyState extends State<_HomeBody>
                 child: MaterialButton(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    final message = '🆘 EMERGENCY SOS!\n\n'
+                    final message = '≡ƒåÿ EMERGENCY SOS!\n\n'
                         'I need help urgently!\n\n'
-                        '📍 My live location:\n${data.googleMapsLink}\n\n'
+                        '≡ƒôì My live location:\n${data.googleMapsLink}\n\n'
                         'Coordinates: ${data.latitude.toStringAsFixed(6)}, ${data.longitude.toStringAsFixed(6)}\n\n'
-                        '⏰ Time: ${DateTime.now().toString().substring(0, 19)}\n\n'
+                        'ΓÅ░ Time: ${DateTime.now().toString().substring(0, 19)}\n\n'
                         'Sent via AI Smart SOS';
 
                     await Share.share(message);
@@ -804,63 +655,12 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  /// Shows a snackbar with an action button that opens the appropriate
-  /// settings screen (app permissions or device location toggle) and
-  /// retries location fetch when the user returns.
-  void _showLocationSettingsSnackbar(
-    String message, {
-    required bool isPermission,
-  }) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: AppTheme.bodyMedium.copyWith(color: Colors.white),
-        ),
-        backgroundColor: AppTheme.emergencyRed,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        action: SnackBarAction(
-          label: 'OPEN SETTINGS',
-          textColor: Colors.white,
-          onPressed: () async {
-            if (isPermission) {
-              await Geolocator.openAppSettings();
-            } else {
-              await Geolocator.openLocationSettings();
-            }
-            // Retry after the user returns from settings
-            await Future.delayed(const Duration(seconds: 1));
-            if (mounted) {
-              _fetchLocation();
-              _locationTracker.stopTracking();
-              _startLocationTracking();
-            }
-          },
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+      color: AppTheme.background,
       child: Stack(
         children: [
-          // Particle background
-          AnimatedBuilder(
-            animation: _particleController,
-            builder: (context, _) {
-              return CustomPaint(
-                painter: _ParticlePainter(_particleController.value),
-                size: Size.infinite,
-              );
-            },
-          ),
-
           // Main content
           SafeArea(
             child: SingleChildScrollView(
@@ -868,20 +668,19 @@ class _HomeBodyState extends State<_HomeBody>
               child: Column(
                 children: [
                   _buildTopBar(),
-                  _buildStatusBar(),
-                  const SizedBox(height: 16),
-                  _buildMapCard(),
-                  const SizedBox(height: 8),
-                  _buildMapLegend(),
-                  const SizedBox(height: 20),
-                  _buildEmergencyPlacesSection(),
                   const SizedBox(height: 16),
                   _buildSOSButton(),
-                  const SizedBox(height: 16),
-                  _buildQuickActions(),
-                  const SizedBox(height: 12),
-                  _buildLocationBar(),
                   const SizedBox(height: 20),
+                  _buildLocationBar(),
+                  const SizedBox(height: 24),
+                  _buildNearbyServicesSection(),
+                  const SizedBox(height: 24),
+                  _buildQuickActions(),
+                  const SizedBox(height: 24),
+                  _buildAssistantCard(),
+                  const SizedBox(height: 24),
+                  _buildEmergencyContactsSection(),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -898,7 +697,6 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Temporary Test Emergency Button ────────────────────────────────────
   Widget _buildTestEmergencyButton() {
     return GestureDetector(
       onTap: () {
@@ -910,17 +708,8 @@ class _HomeBodyState extends State<_HomeBody>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppTheme.emergencyRed.withValues(alpha: 0.9),
-              AppTheme.emergencyRedDark.withValues(alpha: 0.9),
-            ],
-          ),
+          color: AppTheme.emergencyRed,
           borderRadius: BorderRadius.circular(30),
-          border: Border.all(
-            color: AppTheme.emergencyRed.withValues(alpha: 0.6),
-            width: 1,
-          ),
           boxShadow: [
             BoxShadow(
               color: AppTheme.emergencyRed.withValues(alpha: 0.35),
@@ -933,8 +722,7 @@ class _HomeBodyState extends State<_HomeBody>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.warning_amber_rounded,
-                color: Colors.white, size: 20),
+            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 8),
             Text(
               'Test Emergency',
@@ -942,7 +730,6 @@ class _HomeBodyState extends State<_HomeBody>
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
-                letterSpacing: 0.5,
               ),
             ),
           ],
@@ -951,107 +738,66 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Top Bar ─────────────────────────────────────────────────────────────
   Widget _buildTopBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         children: [
-          // App logo
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.primaryCyan.withValues(alpha: 0.1),
-              border:
-                  Border.all(color: AppTheme.primaryCyan.withValues(alpha: 0.3)),
+          GestureDetector(
+            onTap: () => Scaffold.of(context).openDrawer(),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppTheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: const Icon(Icons.menu, color: AppTheme.primaryCyan, size: 24),
             ),
-            child: const Icon(Icons.public, color: AppTheme.primaryCyan, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'AI SMART SOS',
-                style: AppTheme.headingSmall.copyWith(fontSize: 14),
+                style: AppTheme.headingMedium.copyWith(fontSize: 18),
               ),
+              const SizedBox(height: 2),
               Text(
                 'Emergency Response',
-                style: AppTheme.bodySmall.copyWith(fontSize: 11),
+                style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
               ),
             ],
           ),
           const Spacer(),
-          // Profile avatar / Settings
-          PopupMenuButton<String>(
-            offset: const Offset(0, 50),
-            color: AppTheme.surfaceLight,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            onSelected: (value) async {
-              if (value == 'profile') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const UserProfileScreen()),
-                );
-              } else if (value == 'logout') {
-                await AuthService.logout();
-                if (!mounted) return;
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  PageRouteBuilder(
-                    pageBuilder: (_, _, _) => const LoginScreen(),
-                    transitionsBuilder: (_, anim, _, child) =>
-                        FadeTransition(opacity: anim, child: child),
-                    transitionDuration: const Duration(milliseconds: 600),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppTheme.successGreen.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.shield, color: AppTheme.successGreen, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  'Protected',
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.successGreen,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
                   ),
-                  (route) => false,
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'profile',
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline, color: AppTheme.primaryCyan, size: 20),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Profile',
-                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary),
-                    ),
-                  ],
                 ),
-              ),
-              PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    const Icon(Icons.logout, color: AppTheme.emergencyRed, size: 20),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Logout',
-                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.emergencyRed),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppTheme.cyanGradient,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryCyan.withValues(alpha: 0.2),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.person, color: Colors.white, size: 22),
+              ],
             ),
           ),
         ],
@@ -1059,100 +805,27 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── System Status Bar ──────────────────────────────────────────────────
-  Widget _buildStatusBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: AppTheme.glassDecoration(
-          borderRadius: 16,
-          opacity: 0.06,
-          borderColor: AppTheme.successGreen.withValues(alpha: 0.15),
-        ),
-        child: Row(
-          children: [
-            AnimatedBuilder(
-              animation: _statusPulse,
-              builder: (context, _) {
-                return Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppTheme.successGreen,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.successGreen
-                            .withValues(alpha: _statusPulse.value * 0.6),
-                        blurRadius: 8,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'SYSTEM ACTIVE',
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.successGreen,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Icon(Icons.shield_outlined,
-                color: AppTheme.successGreen.withValues(alpha: 0.6), size: 18),
-            const SizedBox(width: 6),
-            Text(
-              'Protected',
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.successGreen.withValues(alpha: 0.8),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── SOS Button ─────────────────────────────────────────────────────────
   Widget _buildSOSButton() {
-    return Column(
-      children: [
-        Text(
-          _sosPressed ? 'ALERT TRIGGERED' : 'PRESS FOR EMERGENCY',
-          style: AppTheme.bodySmall.copyWith(
-            letterSpacing: 3,
-            color: _sosPressed ? AppTheme.emergencyRed : AppTheme.textMuted,
-          ),
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: 220,
-          height: 220,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Ripple rings
-              AnimatedBuilder(
-                animation: _rippleAnimation,
-                builder: (context, _) {
-                  return CustomPaint(
-                    painter: _RipplePainter(
-                      progress: _rippleAnimation.value,
-                      color: _sosPressed
-                          ? AppTheme.emergencyRed
-                          : AppTheme.emergencyRed.withValues(alpha: 0.4),
-                    ),
-                    size: const Size(220, 220),
-                  );
-                },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        decoration: AppTheme.glassDecoration(borderRadius: 32),
+        child: Column(
+          children: [
+            Text(
+              'PRESS FOR EMERGENCY',
+              style: AppTheme.bodyMedium.copyWith(
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
               ),
-              // Main button
-              AnimatedBuilder(
+            ),
+            const SizedBox(height: 40),
+            GestureDetector(
+              onTap: _triggerSOS,
+              child: AnimatedBuilder(
                 animation: _sosPulse,
                 builder: (context, child) {
                   return Transform.scale(
@@ -1160,111 +833,172 @@ class _HomeBodyState extends State<_HomeBody>
                     child: child,
                   );
                 },
-                child: GestureDetector(
-                  onTap: _triggerSOS,
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppTheme.redGradient,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.emergencyRed.withValues(alpha: 0.5),
-                          blurRadius: 30,
-                          spreadRadius: 5,
-                        ),
-                        BoxShadow(
-                          color: AppTheme.emergencyRed.withValues(alpha: 0.2),
-                          blurRadius: 60,
-                          spreadRadius: 15,
-                        ),
-                      ],
-                    ),
-                    child: _isSending
-                        ? const Center(
-                            child: SizedBox(
-                              width: 36,
-                              height: 36,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 3,
-                              ),
-                            ),
-                          )
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.sos,
-                                  color: Colors.white, size: 42),
-                              const SizedBox(height: 4),
-                              Text(
-                                'SOS',
-                                style: AppTheme.headingSmall.copyWith(
-                                  fontSize: 20,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
+                child: Container(
+                  width: 200,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppTheme.redGradient,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.emergencyRed.withValues(alpha: 0.3),
+                        blurRadius: 40,
+                        spreadRadius: 10,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: AppTheme.emergencyRed.withValues(alpha: 0.1),
+                        blurRadius: 80,
+                        spreadRadius: 20,
+                      ),
+                    ],
                   ),
+                  child: _isSending
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 4),
+                        )
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'SOS',
+                              style: AppTheme.headingLarge.copyWith(color: Colors.white),
+                            ),
+                          ],
+                        ),
                 ),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          _sosPressed ? 'Tap again to cancel' : 'Tap to send emergency alert',
-          style: AppTheme.bodySmall,
-        ),
-      ],
-    );
-  }
-
-  // ── Quick Actions ──────────────────────────────────────────────────────
-  Widget _buildQuickActions() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 14),
-            child: Text(
-              'QUICK ACTIONS',
-              style: AppTheme.bodySmall.copyWith(
-                letterSpacing: 2,
+            ),
+            const SizedBox(height: 40),
+            Text(
+              'Tap to send emergency alert',
+              style: AppTheme.bodyMedium.copyWith(
+                color: AppTheme.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
             ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.location_on, color: AppTheme.successGreen, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  'Location shared with trusted contacts',
+                  style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: AppTheme.glassDecoration(borderRadius: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryCyan.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.my_location, color: AppTheme.primaryCyan, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Current Location',
+                    style: AppTheme.bodySmall.copyWith(
+                      color: AppTheme.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _locationText,
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_currentLat == null && _gpsCoords == 'Location Unavailable')
+              IconButton(
+                icon: const Icon(Icons.refresh, color: AppTheme.primaryCyan),
+                onPressed: () {
+                  setState(() {
+                    _locationText = 'Fetching...';
+                  });
+                  _fetchLocation();
+                },
+              )
+            else
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _gpsCoords.contains('°') ? AppTheme.successGreen : AppTheme.warningAmber,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Quick Actions',
+            style: AppTheme.headingSmall.copyWith(color: AppTheme.textPrimary),
           ),
+          const SizedBox(height: 16),
           Row(
             children: [
               _buildActionCard(
-                icon: Icons.local_police_outlined,
+                icon: Icons.local_police,
                 label: 'Police',
-                color: const Color(0xFF448AFF),
+                number: '100',
+                color: AppTheme.primaryCyan,
                 onTap: () => _triggerQuickAction('Police'),
               ),
               const SizedBox(width: 12),
               _buildActionCard(
-                icon: Icons.local_hospital_outlined,
+                icon: Icons.local_hospital,
                 label: 'Ambulance',
+                number: '108',
                 color: AppTheme.emergencyRed,
                 onTap: () => _triggerQuickAction('Ambulance'),
               ),
               const SizedBox(width: 12),
               _buildActionCard(
-                icon: Icons.local_fire_department_outlined,
+                icon: Icons.local_fire_department,
                 label: 'Fire',
+                number: '101',
                 color: AppTheme.warningAmber,
                 onTap: () => _triggerQuickAction('Fire'),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _buildAssistantCard(),
         ],
       ),
     );
@@ -1273,6 +1007,7 @@ class _HomeBodyState extends State<_HomeBody>
   Widget _buildActionCard({
     required IconData icon,
     required String label,
+    required String number,
     required Color color,
     required VoidCallback onTap,
   }) {
@@ -1281,35 +1016,30 @@ class _HomeBodyState extends State<_HomeBody>
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 20),
-          decoration: AppTheme.glassDecoration(
-            borderRadius: 18,
-            opacity: 0.06,
-            borderColor: color.withValues(alpha: 0.2),
-          ),
+          decoration: AppTheme.glassDecoration(borderRadius: 20),
           child: Column(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
-                  color: color.withValues(alpha: 0.12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.2),
-                      blurRadius: 12,
-                    ),
-                  ],
                 ),
-                child: Icon(icon, color: color, size: 26),
+                child: Icon(icon, color: color, size: 28),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               Text(
                 label,
                 style: AppTheme.bodyMedium.copyWith(
-                  color: color,
+                  color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                number,
+                style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
               ),
             ],
           ),
@@ -1319,303 +1049,58 @@ class _HomeBodyState extends State<_HomeBody>
   }
 
   Widget _buildAssistantCard() {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const AiEmergencyDashboardScreen(),
-          ),
-        );
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-        decoration: AppTheme.glassDecoration(
-          borderRadius: 18,
-          opacity: 0.08,
-          borderColor: AppTheme.primaryCyan.withValues(alpha: 0.2),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppTheme.cyanGradient,
-                boxShadow: AppTheme.neonGlow(AppTheme.primaryCyan,
-                    intensity: 0.25),
-              ),
-              child: const Icon(Icons.support_agent_rounded,
-                  color: Colors.white, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'AI Emergency Assistant',
-                    style: AppTheme.bodyMedium.copyWith(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Get safe guidance during emergencies without leaving the app.',
-                    style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textMuted,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: AppTheme.textMuted, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Map Card ────────────────────────────────────────────────────────────
-  Widget _buildMapCard() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        height: 230,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: AppTheme.primaryCyan.withValues(alpha: 0.2),
-            width: 1,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            final state = context.findAncestorStateOfType<_HomeScreenState>();
+            if (state != null) {
+              state.setState(() => state._currentTab = 1);
+            }
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: AppTheme.cyanGradient,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryCyan.withValues(alpha: 0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primaryCyan.withValues(alpha: 0.08),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(17),
-          child: Stack(
+          child: Row(
             children: [
-              // Map
-              FlutterMap(
-                mapController: _mapController,
-                options: _mapOptions,
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.ai_smart_sos',
-                  ),
-                  // Nearby places markers
-                  if (_nearbyPlaces.isNotEmpty)
-                    MarkerLayer(
-                      markers: _nearbyPlaces.map((place) {
-                        return Marker(
-                          point: LatLng(place.latitude, place.longitude),
-                          width: 36,
-                          height: 36,
-                          child: _buildPlaceMarker(place),
-                        );
-                      }).toList(),
-                    ),
-                  // User location marker (on top)
-                  if (_currentLat != null && _currentLng != null)
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: LatLng(_currentLat!, _currentLng!),
-                          width: 50,
-                          height: 50,
-                          child: _buildLocationMarker(),
-                        ),
-                      ],
-                    ),
-                ],
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
               ),
-
-              // Gradient overlay at the top for the label
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppTheme.background.withValues(alpha: 0.85),
-                        AppTheme.background.withValues(alpha: 0.0),
-                      ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Emergency Assistant',
+                      style: AppTheme.headingSmall.copyWith(color: Colors.white),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.map_outlined,
-                          color: AppTheme.primaryCyan, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'LIVE LOCATION',
-                        style: AppTheme.bodySmall.copyWith(
-                          color: AppTheme.primaryCyan,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const Spacer(),
-                      // Loading indicator for nearby places
-                      if (_loadingPlaces)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: AppTheme.primaryCyan.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ),
-                      if (_currentLat != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppTheme.successGreen.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: AppTheme.successGreen.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppTheme.successGreen,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                'LIVE',
-                                style: AppTheme.bodySmall.copyWith(
-                                  color: AppTheme.successGreen,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 10,
-                                  letterSpacing: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Get safe guidance instantly.',
+                      style: AppTheme.bodySmall.copyWith(color: Colors.white.withValues(alpha: 0.9)),
+                    ),
+                  ],
                 ),
               ),
-
-              // Selected place info card
-              if (_selectedPlace != null)
-                Positioned(
-                  bottom: 8,
-                  left: 8,
-                  right: 50,
-                  child: _buildPlaceInfoCard(_selectedPlace!),
-                ),
-
-              // Refresh location button
-              Positioned(
-                bottom: 50,
-                right: 10,
-                child: GestureDetector(
-                  onTap: _refreshingLocation ? null : () async {
-                    setState(() => _refreshingLocation = true);
-                    await _fetchLocation();
-                    setState(() => _refreshingLocation = false);
-                  },
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppTheme.surface.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppTheme.successGreen.withValues(alpha: 0.3),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.successGreen.withValues(alpha: 0.15),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: _refreshingLocation
-                        ? Padding(
-                            padding: const EdgeInsets.all(9),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppTheme.successGreen,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.refresh,
-                            color: AppTheme.successGreen,
-                            size: 18,
-                          ),
-                  ),
-                ),
-              ),
-
-              // Re-center button
-              if (_currentLat != null && _currentLng != null)
-                Positioned(
-                  bottom: 10,
-                  right: 10,
-                  child: GestureDetector(
-                    onTap: () {
-                      _mapController.move(
-                        LatLng(_currentLat!, _currentLng!),
-                        15.0,
-                      );
-                      setState(() => _selectedPlace = null);
-                    },
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppTheme.surface.withValues(alpha: 0.9),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppTheme.primaryCyan.withValues(alpha: 0.3),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryCyan.withValues(alpha: 0.15),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.my_location,
-                        color: AppTheme.primaryCyan,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
+              const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
             ],
           ),
         ),
@@ -1623,1397 +1108,394 @@ class _HomeBodyState extends State<_HomeBody>
     );
   }
 
-  // ── Place Marker ────────────────────────────────────────────────────────
-  Widget _buildPlaceMarker(NearbyPlace place) {
-    final color = _placeColor(place.type);
-    final icon = _placeIcon(place.type);
 
-    return GestureDetector(
-      onTap: () => setState(() => _selectedPlace = place),
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: AppTheme.surface.withValues(alpha: 0.92),
-          shape: BoxShape.circle,
-          border: Border.all(color: color, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.4),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Icon(icon, color: color, size: 16),
-      ),
-    );
-  }
-
-  // ── Place Info Card (shown on marker tap) ──────────────────────────────
-  Widget _buildPlaceInfoCard(NearbyPlace place) {
-    final color = _placeColor(place.type);
-    final icon = _placeIcon(place.type);
-    final typeLabel = _placeLabel(place.type);
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.surface.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+  Widget _buildEmergencyContactsSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 18),
+              Text(
+                'Emergency Contacts',
+                style: AppTheme.headingSmall.copyWith(color: AppTheme.textPrimary),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      place.name,
-                      style: AppTheme.bodyMedium.copyWith(
-                        color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Text(
-                          typeLabel,
-                          style: AppTheme.bodySmall.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 3,
-                          height: 3,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppTheme.textMuted.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          place.distanceText,
-                          style: AppTheme.bodySmall.copyWith(
-                            color: AppTheme.textSecondary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () => setState(() => _selectedPlace = null),
-                child: Icon(
-                  Icons.close,
-                  color: AppTheme.textMuted,
-                  size: 16,
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EmergencyContactsScreen()),
+                  ).then((_) => _fetchContacts());
+                },
+                child: Text(
+                  'Manage',
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: AppTheme.primaryCyan,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          // Navigate button
-          GestureDetector(
-            onTap: () {
-              final url = Uri.parse(
-                'https://www.google.com/maps/dir/?api=1'
-                '&origin=${_currentLat ?? ''},${_currentLng ?? ''}'
-                '&destination=${place.latitude},${place.longitude}'
-                '&travelmode=driving',
-              );
-              launchUrl(url, mode: LaunchMode.externalApplication);
-            },
-            child: Container(
+          if (_loadingContacts)
+            const Center(child: CircularProgressIndicator())
+          else if (_contacts.isEmpty)
+            Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: color.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              padding: const EdgeInsets.all(24),
+              decoration: AppTheme.glassDecoration(borderRadius: 16),
+              child: Column(
                 children: [
-                  Icon(Icons.directions, color: color, size: 16),
-                  const SizedBox(width: 6),
+                  Icon(Icons.people_outline, color: AppTheme.textMuted, size: 48),
+                  const SizedBox(height: 16),
                   Text(
-                    'Navigate',
-                    style: AppTheme.bodySmall.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      letterSpacing: 0.5,
-                    ),
+                    'No contacts added yet',
+                    style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Map Legend (below map card) ────────────────────────────────────────
-  Widget _buildMapLegend() {
-    // Only show legend when loading or when real data is available
-    if (!_loadingPlaces && _nearbyPlaces.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final hospitalCount = _nearbyPlaces.where((p) => p.type == PlaceType.hospital).length;
-    final policeCount = _nearbyPlaces.where((p) => p.type == PlaceType.police).length;
-    final ambulanceCount = _nearbyPlaces.where((p) => p.type == PlaceType.ambulance).length;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          if (hospitalCount > 0 || _loadingPlaces)
-            _buildLegendItem(
-              color: const Color(0xFFFF5252),
-              label: 'Hospital',
-              count: hospitalCount,
-            ),
-          if (hospitalCount > 0 || _loadingPlaces)
-            const SizedBox(width: 16),
-          if (policeCount > 0 || _loadingPlaces)
-            _buildLegendItem(
-              color: const Color(0xFF448AFF),
-              label: 'Police',
-              count: policeCount,
-            ),
-          if (policeCount > 0 || _loadingPlaces)
-            const SizedBox(width: 16),
-          if (ambulanceCount > 0 || _loadingPlaces)
-            _buildLegendItem(
-              color: AppTheme.warningAmber,
-              label: 'Ambulance',
-              count: ambulanceCount,
-            ),
-          const Spacer(),
-          if (_loadingPlaces)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 10,
-                  height: 10,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    color: AppTheme.primaryCyan.withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Searching...',
-                  style: AppTheme.bodySmall.copyWith(
-                    fontSize: 11,
-                    color: AppTheme.textMuted,
-                  ),
-                ),
-              ],
             )
-          else if (_nearbyPlaces.isNotEmpty)
-            Text(
-              '${_nearbyPlaces.length} places found',
-              style: AppTheme.bodySmall.copyWith(
-                fontSize: 11,
-                color: AppTheme.successGreen,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendItem({
-    required Color color,
-    required String label,
-    required int count,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.4),
-                blurRadius: 4,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          '$label${count > 0 ? ' ($count)' : ''}',
-          style: AppTheme.bodySmall.copyWith(
-            fontSize: 11,
-            color: AppTheme.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Emergency Places Section (Advanced) ─────────────────────────────────
-  Widget _buildEmergencyPlacesSection() {
-    if (_nearbyPlaces.isEmpty && !_loadingPlaces) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Section Header ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  gradient: LinearGradient(
-                    colors: [
-                      AppTheme.primaryCyan.withValues(alpha: 0.2),
-                      AppTheme.primaryCyan.withValues(alpha: 0.05),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  border: Border.all(
-                    color: AppTheme.primaryCyan.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.emergency_outlined,
-                  color: AppTheme.primaryCyan,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          else
+            ..._contacts.take(3).map((contact) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                decoration: AppTheme.glassDecoration(borderRadius: 16),
+                child: Row(
                   children: [
-                    Text(
-                      'NEARBY EMERGENCY SERVICES',
-                      style: AppTheme.headingSmall.copyWith(
-                        fontSize: 13,
-                        letterSpacing: 2,
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryCyan.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          contact.name.substring(0, 1).toUpperCase(),
+                          style: AppTheme.headingSmall.copyWith(color: AppTheme.primaryCyan),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _loadingPlaces
-                          ? 'Scanning area...'
-                          : '${_nearbyPlaces.length} services found in your area',
-                      style: AppTheme.bodySmall.copyWith(
-                        color: AppTheme.textMuted,
-                        fontSize: 11,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            contact.name,
+                            style: AppTheme.bodyMedium.copyWith(
+                              color: AppTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            contact.relationship,
+                            style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.successGreen.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.call, color: AppTheme.successGreen),
+                        onPressed: () {
+                          // Call logic
+                        },
                       ),
                     ),
                   ],
                 ),
-              ),
-              if (_loadingPlaces)
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.primaryCyan.withValues(alpha: 0.6),
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppTheme.successGreen.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppTheme.successGreen,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        'LIVE',
-                        style: AppTheme.bodySmall.copyWith(
-                          color: AppTheme.successGreen,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 9,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // ── Search Bar ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surface.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.glassBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primaryCyan.withValues(alpha: 0.03),
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: _placeSearchController,
-              onChanged: (value) =>
-                  setState(() => _placeSearchQuery = value),
-              style: AppTheme.bodyMedium.copyWith(
-                color: AppTheme.textPrimary,
-                fontSize: 14,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Search hospitals, police, ambulance...',
-                hintStyle: AppTheme.bodySmall.copyWith(
-                  color: AppTheme.textMuted.withValues(alpha: 0.6),
-                  fontSize: 13,
-                ),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  color: AppTheme.primaryCyan.withValues(alpha: 0.5),
-                  size: 20,
-                ),
-                suffixIcon: _placeSearchQuery.isNotEmpty
-                    ? GestureDetector(
-                        onTap: () {
-                          _placeSearchController.clear();
-                          setState(() => _placeSearchQuery = '');
-                        },
-                        child: Icon(
-                          Icons.close_rounded,
-                          color: AppTheme.textMuted,
-                          size: 18,
-                        ),
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // ── Filter Tabs ──
-        _buildAdvancedFilterTabs(),
-        const SizedBox(height: 12),
-
-        // ── Place Cards ──
-        _buildAdvancedPlaceCards(),
-      ],
-    );
-  }
-
-  // ── Advanced Filter Tabs ────────────────────────────────────────────────
-  Widget _buildAdvancedFilterTabs() {
-    final hospitalCount =
-        _nearbyPlaces.where((p) => p.type == PlaceType.hospital).length;
-    final policeCount =
-        _nearbyPlaces.where((p) => p.type == PlaceType.police).length;
-    final ambulanceCount =
-        _nearbyPlaces.where((p) => p.type == PlaceType.ambulance).length;
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          _buildAdvancedFilterTab(
-            label: 'All',
-            count: _nearbyPlaces.length,
-            type: null,
-            icon: Icons.apps_rounded,
-            color: AppTheme.primaryCyan,
-          ),
-          const SizedBox(width: 8),
-          _buildAdvancedFilterTab(
-            label: 'Hospital',
-            count: hospitalCount,
-            type: PlaceType.hospital,
-            icon: Icons.local_hospital_rounded,
-            color: const Color(0xFFFF5252),
-          ),
-          const SizedBox(width: 8),
-          _buildAdvancedFilterTab(
-            label: 'Police',
-            count: policeCount,
-            type: PlaceType.police,
-            icon: Icons.local_police_rounded,
-            color: const Color(0xFF448AFF),
-          ),
-          const SizedBox(width: 8),
-          _buildAdvancedFilterTab(
-            label: 'Ambulance',
-            count: ambulanceCount,
-            type: PlaceType.ambulance,
-            icon: Icons.emergency_rounded,
-            color: AppTheme.warningAmber,
-          ),
+              );
+            }),
         ],
       ),
     );
   }
 
-  Widget _buildAdvancedFilterTab({
-    required String label,
-    required int count,
-    required PlaceType? type,
-    required IconData icon,
-    required Color color,
-  }) {
-    final isActive = _placeFilter == type;
-
-    return GestureDetector(
-      onTap: () => setState(() => _placeFilter = type),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive ? color.withValues(alpha: 0.5) : AppTheme.glassBorder,
-            width: isActive ? 1.5 : 0.5,
-          ),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.15),
-                    blurRadius: 12,
-                    spreadRadius: 0,
-                  ),
-                ]
-              : [],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? color : AppTheme.textMuted,
-              size: 16,
-            ),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: AppTheme.bodySmall.copyWith(
-                color: isActive ? color : AppTheme.textMuted,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 12,
-                letterSpacing: 0.3,
-              ),
-            ),
-            if (count > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? color.withValues(alpha: 0.2)
-                      : AppTheme.glassWhite,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '$count',
-                  style: AppTheme.bodySmall.copyWith(
-                    color: isActive ? color : AppTheme.textMuted,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Advanced Place Cards ────────────────────────────────────────────────
-  Widget _buildAdvancedPlaceCards() {
-    if (_loadingPlaces) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Column(
-          children: List.generate(3, (i) => _buildShimmerCard(i)),
-        ),
-      );
-    }
-
-    // Apply type filter
-    var filtered = _placeFilter == null
-        ? _nearbyPlaces
-        : _nearbyPlaces.where((p) => p.type == _placeFilter).toList();
-
-    // Apply search filter
-    if (_placeSearchQuery.isNotEmpty) {
-      final query = _placeSearchQuery.toLowerCase();
-      filtered = filtered
-          .where((p) =>
-              p.name.toLowerCase().contains(query) ||
-              (p.address?.toLowerCase().contains(query) ?? false) ||
-              _placeLabel(p.type).toLowerCase().contains(query))
-          .toList();
-    }
-
-    if (filtered.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: AppTheme.glassDecoration(
-            borderRadius: 16,
-            opacity: 0.04,
-          ),
-          child: Column(
-            children: [
-              Icon(
-                Icons.search_off_rounded,
-                color: AppTheme.textMuted.withValues(alpha: 0.4),
-                size: 40,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _placeSearchQuery.isNotEmpty
-                    ? 'No results for "$_placeSearchQuery"'
-                    : 'No ${_placeFilter != null ? '${_placeLabel(_placeFilter!).toLowerCase()}s' : 'places'} found nearby',
-                style: AppTheme.bodyMedium.copyWith(
-                  color: AppTheme.textMuted,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Try a different filter or search term',
-                style: AppTheme.bodySmall.copyWith(
-                  color: AppTheme.textMuted.withValues(alpha: 0.6),
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
+  Widget _buildNearbyServicesSection() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
-        children: filtered
-            .take(15)
-            .toList()
-            .asMap()
-            .entries
-            .map((entry) => _buildAdvancedPlaceCard(entry.value, entry.key))
-            .toList(),
-      ),
-    );
-  }
-
-  Widget _buildShimmerCard(int index) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: AppTheme.glassDecoration(
-          borderRadius: 16,
-          opacity: 0.04,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppTheme.glassWhite,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 14,
-                        width: 120 + (index * 20.0),
-                        decoration: BoxDecoration(
-                          color: AppTheme.glassWhite,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        height: 10,
-                        width: 80,
-                        decoration: BoxDecoration(
-                          color: AppTheme.glassWhite,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 60,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: AppTheme.glassWhite,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 10,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppTheme.glassWhite,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AppTheme.glassWhite,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AppTheme.glassWhite,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdvancedPlaceCard(NearbyPlace place, int index) {
-    final color = _placeColor(place.type);
-    final icon = _placeIcon(place.type);
-    final typeLabel = _placeLabel(place.type);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surface.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: color.withValues(alpha: 0.12),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: color.withValues(alpha: 0.04),
-              blurRadius: 20,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Stack(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Gradient accent line on left
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                child: Container(
-                  width: 3,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        color,
-                        color.withValues(alpha: 0.3),
+              Text(
+                'Nearby Emergency Services',
+                style: AppTheme.headingSmall.copyWith(color: AppTheme.textPrimary),
+              ),
+              Row(
+                children: [
+                  if (_loadingPlaces)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 12),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryCyan),
+                      ),
+                    ),
+                  if (!_loadingPlaces && _nearbyPlaces.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => NearbyServicesScreen(
+                              places: _nearbyPlaces,
+                              currentLat: _currentLat ?? 0,
+                              currentLng: _currentLng ?? 0,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'View All →',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppTheme.primaryCyan,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_loadingPlaces)
+            SizedBox(
+              height: 130,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 3,
+                separatorBuilder: (context, index) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  return Container(
+                    width: 280,
+                    padding: const EdgeInsets.all(16),
+                    decoration: AppTheme.glassDecoration(borderRadius: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppTheme.textMuted.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 120,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.textMuted.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  width: 80,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.textMuted.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Container(
+                          width: double.infinity,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppTheme.textMuted.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
+            )
+          else if (_nearbyPlaces.isEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _nearbyError.isNotEmpty ? _nearbyError : 'No services found within 20km.',
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textMuted),
+                ),
+                if (_nearbyError.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: TextButton(
+                      onPressed: () {
+                        if (_currentLat != null && _currentLng != null) {
+                          setState(() {
+                            _loadingPlaces = true;
+                            _nearbyError = '';
+                          });
+                          _fetchNearbyPlaces(_currentLat!, _currentLng!);
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(50, 30),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Retry',
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.primaryCyan, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  )
+              ],
+            )
+          else if (_nearbyPlaces.isNotEmpty)
+            SizedBox(
+              height: 130,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _nearbyPlaces.length > 5 ? 5 : _nearbyPlaces.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final place = _nearbyPlaces[index];
+                  final isHospital = place.type == PlaceType.hospital;
+                  final isPolice = place.type == PlaceType.police;
+                  
+                  final icon = isHospital 
+                    ? Icons.local_hospital 
+                    : (isPolice ? Icons.local_police : Icons.local_fire_department);
+                  
+                  final color = isHospital 
+                    ? AppTheme.emergencyRed 
+                    : (isPolice ? AppTheme.primaryCyan : AppTheme.warningAmber);
 
-              // Card content
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Top Row: Icon + Name + Badge ──
-                    Row(
+                  return Container(
+                    width: 280,
+                    padding: const EdgeInsets.all(16),
+                    decoration: AppTheme.glassDecoration(borderRadius: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Type icon with gradient background
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(13),
-                            gradient: LinearGradient(
-                              colors: [
-                                color.withValues(alpha: 0.2),
-                                color.withValues(alpha: 0.08),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            border: Border.all(
-                              color: color.withValues(alpha: 0.25),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: color.withValues(alpha: 0.15),
-                                blurRadius: 8,
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
                               ),
-                            ],
-                          ),
-                          child: Icon(icon, color: color, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        // Name + Type
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                place.name,
-                                style: AppTheme.bodyMedium.copyWith(
-                                  color: AppTheme.textPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 3),
-                              Row(
+                              child: Icon(icon, color: color, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: color,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: color.withValues(alpha: 0.5),
-                                          blurRadius: 4,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
                                   Text(
-                                    typeLabel,
-                                    style: AppTheme.bodySmall.copyWith(
-                                      color: color.withValues(alpha: 0.9),
+                                    place.name,
+                                    style: AppTheme.bodyMedium.copyWith(
+                                      color: AppTheme.textPrimary,
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 11,
-                                      letterSpacing: 0.3,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${place.distanceText} ΓÇó ${place.address ?? "Unknown Address"}',
+                                    style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Status badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: place.isNearby
-                                  ? [
-                                      AppTheme.successGreen.withValues(alpha: 0.15),
-                                      AppTheme.successGreen.withValues(alpha: 0.05),
-                                    ]
-                                  : [
-                                      AppTheme.primaryCyan.withValues(alpha: 0.12),
-                                      AppTheme.primaryCyan.withValues(alpha: 0.04),
-                                    ],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: place.isNearby
-                                  ? AppTheme.successGreen.withValues(alpha: 0.3)
-                                  : AppTheme.primaryCyan.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: place.isNearby
-                                      ? AppTheme.successGreen
-                                      : AppTheme.primaryCyan,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                place.statusLabel,
-                                style: AppTheme.bodySmall.copyWith(
-                                  color: place.isNearby
-                                      ? AppTheme.successGreen
-                                      : AppTheme.primaryCyan,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 10,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // ── Address ──
-                    if (place.address != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.glassWhite.withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.location_on_outlined,
-                              color: AppTheme.textMuted.withValues(alpha: 0.7),
-                              size: 15,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                place.address!,
-                                style: AppTheme.bodySmall.copyWith(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 12,
-                                  height: 1.3,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-
-                    // ── Distance + Travel Time ──
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        // Distance chip
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryCyan.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: AppTheme.primaryCyan.withValues(alpha: 0.15),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.straighten_rounded,
-                                color: AppTheme.primaryCyan.withValues(alpha: 0.8),
-                                size: 13,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                place.distanceText,
-                                style: AppTheme.bodySmall.copyWith(
-                                  color: AppTheme.primaryCyan,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
+                        const Spacer(),
+                        Row(
+                          children: [
+                            if (place.isOpen != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: (place.isOpen! ? AppTheme.successGreen : AppTheme.emergencyRed).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Travel time chip
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.warningAmber.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: AppTheme.warningAmber.withValues(alpha: 0.15),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.access_time_rounded,
-                                color: AppTheme.warningAmber.withValues(alpha: 0.8),
-                                size: 13,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                '~${place.estimatedTravelTime}',
-                                style: AppTheme.bodySmall.copyWith(
-                                  color: AppTheme.warningAmber,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Phone indicator
-                        if (place.phone != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.successGreen.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color:
-                                    AppTheme.successGreen.withValues(alpha: 0.15),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.phone_rounded,
-                              color: AppTheme.successGreen.withValues(alpha: 0.8),
-                              size: 13,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-
-                    // ── Action Buttons ──
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        // Navigate button
-                        Expanded(
-                          flex: place.phone != null ? 3 : 1,
-                          child: GestureDetector(
-                            onTap: () {
-                              final url = Uri.parse(
-                                'https://www.google.com/maps/dir/?api=1'
-                                '&origin=${_currentLat ?? ''},${_currentLng ?? ''}'
-                                '&destination=${place.latitude},${place.longitude}'
-                                '&travelmode=driving',
-                              );
-                              launchUrl(
-                                url,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            },
-                            child: Container(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 11),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    color.withValues(alpha: 0.2),
-                                    color.withValues(alpha: 0.08),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: color.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.directions_rounded,
-                                    color: color,
-                                    size: 17,
+                                child: Text(
+                                  place.isOpen! ? 'Open' : 'Closed',
+                                  style: AppTheme.bodySmall.copyWith(
+                                    color: place.isOpen! ? AppTheme.successGreen : AppTheme.emergencyRed,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 10,
                                   ),
-                                  const SizedBox(width: 7),
-                                  Text(
-                                    'Navigate',
-                                    style: AppTheme.bodySmall.copyWith(
-                                      color: color,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        // Call button
-                        if (place.phone != null) ...[
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 2,
-                            child: GestureDetector(
+                            const Spacer(),
+                            GestureDetector(
                               onTap: () {
-                                final url =
-                                    Uri.parse('tel:${place.phone}');
-                                launchUrl(url);
+                                final url = Uri.parse(
+                                  'https://www.google.com/maps/dir/?api=1'
+                                  '&origin=${_currentLat ?? ""},${_currentLng ?? ""}'
+                                  '&destination=${place.latitude},${place.longitude}'
+                                  '&travelmode=driving',
+                                );
+                                launchUrl(url, mode: LaunchMode.externalApplication);
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 11),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      AppTheme.successGreen
-                                          .withValues(alpha: 0.2),
-                                      AppTheme.successGreen
-                                          .withValues(alpha: 0.08),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: AppTheme.successGreen
-                                        .withValues(alpha: 0.3),
-                                  ),
+                                  color: AppTheme.primaryCyan.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
-                                      Icons.phone_rounded,
-                                      color: AppTheme.successGreen,
-                                      size: 17,
-                                    ),
-                                    const SizedBox(width: 7),
+                                    const Icon(Icons.navigation, size: 14, color: AppTheme.primaryCyan),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      'Call',
+                                      'Navigate',
                                       style: AppTheme.bodySmall.copyWith(
-                                        color: AppTheme.successGreen,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                        letterSpacing: 0.3,
+                                        color: AppTheme.primaryCyan,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }
-
-  // ── Place helper methods ──────────────────────────────────────────────
-  static Color _placeColor(PlaceType type) {
-    switch (type) {
-      case PlaceType.hospital:
-        return const Color(0xFFFF5252);
-      case PlaceType.police:
-        return const Color(0xFF448AFF);
-      case PlaceType.ambulance:
-        return AppTheme.warningAmber;
-    }
-  }
-
-  static IconData _placeIcon(PlaceType type) {
-    switch (type) {
-      case PlaceType.hospital:
-        return Icons.local_hospital;
-      case PlaceType.police:
-        return Icons.local_police;
-      case PlaceType.ambulance:
-        return Icons.emergency;
-    }
-  }
-
-  static String _placeLabel(PlaceType type) {
-    switch (type) {
-      case PlaceType.hospital:
-        return 'Hospital';
-      case PlaceType.police:
-        return 'Police Station';
-      case PlaceType.ambulance:
-        return 'Ambulance';
-    }
-  }
-
-  Widget _buildLocationMarker() {
-    const Color markerBlue = Color(0xFF4285F4);
-    return AnimatedBuilder(
-      animation: _statusPulse,
-      builder: (context, _) {
-        return Center(
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Outer pulsing ring
-              Container(
-                width: 40 + (_statusPulse.value * 10),
-                height: 40 + (_statusPulse.value * 10),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: markerBlue
-                      .withValues(alpha: 0.12 * (1 - _statusPulse.value * 0.5)),
-                  border: Border.all(
-                    color: markerBlue
-                        .withValues(alpha: 0.35 * (1 - _statusPulse.value * 0.5)),
-                    width: 1.5,
-                  ),
-                ),
-              ),
-              // Inner blue dot
-              Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: markerBlue,
-                  border: Border.all(color: Colors.white, width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: markerBlue.withValues(alpha: 0.6),
-                      blurRadius: 12,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ── Location Bar ───────────────────────────────────────────────────────
-  Widget _buildLocationBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: AppTheme.glassDecoration(
-          borderRadius: 14,
-          opacity: 0.05,
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.location_on_outlined,
-                color: AppTheme.primaryCyan.withValues(alpha: 0.7), size: 20),
-            const SizedBox(width: 10),
-            Text(
-              _gpsCoords,
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.primaryCyan.withValues(alpha: 0.8),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppTheme.successGreen,
-              ),
-            ),
-            const Spacer(),
-            Flexible(
-              child: Text(
-                _locationText,
-                style: AppTheme.bodySmall.copyWith(fontSize: 12),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Ripple Painter ────────────────────────────────────────────────────────
-class _RipplePainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  _RipplePainter({required this.progress, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-
-    for (int i = 0; i < 3; i++) {
-      final ringProgress = (progress + i * 0.33) % 1.0;
-      final radius = 70 + ringProgress * 40;
-      final opacity = (1 - ringProgress) * 0.4;
-
-      final paint = Paint()
-        ..color = color.withValues(alpha: opacity.clamp(0.0, 1.0))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-
-      canvas.drawCircle(center, radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RipplePainter oldDelegate) =>
-      oldDelegate.progress != progress;
-}
-
-// ── Particle Painter ──────────────────────────────────────────────────────
-class _ParticlePainter extends CustomPainter {
-  final double progress;
-  _ParticlePainter(this.progress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final random = Random(42);
-    final paint = Paint();
-
-    for (int i = 0; i < 40; i++) {
-      final x = random.nextDouble() * size.width;
-      final baseY = random.nextDouble() * size.height;
-      final speed = 0.15 + random.nextDouble() * 0.5;
-      final y = (baseY + progress * speed * size.height) % size.height;
-      final radius = 0.4 + random.nextDouble() * 1.0;
-      final opacity = 0.06 + random.nextDouble() * 0.2;
-
-      paint.color = (i % 7 == 0 ? AppTheme.primaryCyan : Colors.white)
-          .withValues(alpha: opacity);
-      canvas.drawCircle(Offset(x, y), radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ParticlePainter oldDelegate) =>
-      oldDelegate.progress != progress;
 }

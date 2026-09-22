@@ -504,6 +504,12 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                   'Alert sent to $contactCount emergency contacts.',
                   style: AppTheme.bodyMedium.copyWith(color: AppTheme.successGreen),
                 )
+              else if (smsStatus == 'queued')
+                Text(
+                  'Network unavailable.\nEmergency alert saved and queued.',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.warningAmber),
+                )
               else if (smsStatus == 'failed_no_provider')
                 Text(
                   'Alert logged locally.\nSMS Not Sent: Provider credentials missing in backend.',

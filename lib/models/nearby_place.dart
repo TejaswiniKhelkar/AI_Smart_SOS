@@ -23,6 +23,30 @@ class NearbyPlace {
     this.isOpen,
   });
 
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'latitude': latitude,
+        'longitude': longitude,
+        'type': type.name,
+        'distanceKm': distanceKm,
+        'address': address,
+        'phone': phone,
+        'isOpen': isOpen,
+      };
+
+  factory NearbyPlace.fromJson(Map<String, dynamic> json) {
+    return NearbyPlace(
+      name: json['name'],
+      latitude: json['latitude'],
+      longitude: json['longitude'],
+      type: PlaceType.values.byName(json['type']),
+      distanceKm: json['distanceKm'],
+      address: json['address'],
+      phone: json['phone'],
+      isOpen: json['isOpen'],
+    );
+  }
+
   /// Priority for sorting: Hospital (1), Ambulance (2), Police (3).
   int get priority {
     switch (type) {

@@ -427,13 +427,13 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
                       decoration: BoxDecoration(
                         color: _smsStatus == 'sent'
                             ? AppTheme.successGreen.withValues(alpha: 0.1)
-                            : AppTheme.warningAmber.withValues(alpha: 0.1),
+                            : (_smsStatus == 'queued' ? AppTheme.warningAmber.withValues(alpha: 0.1) : AppTheme.warningAmber.withValues(alpha: 0.1)),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         _smsStatus == 'sent'
                             ? 'SENT'
-                            : (_smsStatus == 'failed_no_provider' ? 'NOT SENT' : 'FAILED'),
+                            : (_smsStatus == 'queued' ? 'QUEUED' : (_smsStatus == 'failed_no_provider' ? 'NOT SENT' : 'FAILED')),
                         style: AppTheme.bodySmall.copyWith(
                           color: _smsStatus == 'sent'
                               ? AppTheme.successGreen
@@ -447,9 +447,11 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
                     Text(
                       _smsStatus == 'sent'
                           ? 'Trusted contacts have been notified with your emergency status.'
-                          : (_smsStatus == 'failed_no_provider'
+                          : (_smsStatus == 'queued'
+                              ? 'Network unavailable.\nEmergency alert saved and queued.'
+                              : (_smsStatus == 'failed_no_provider'
                               ? 'Alert logged locally.\nSMS Provider credentials missing in backend.'
-                              : 'Alert logged locally. SMS delivery failed.'),
+                              : 'Alert logged locally. SMS delivery failed.')),
                       textAlign: TextAlign.center,
                       style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
                     ),

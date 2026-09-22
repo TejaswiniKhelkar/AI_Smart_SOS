@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/nearby_place.dart';
+import 'network_service.dart';
 
 /// Fetches nearby emergency places from the OpenStreetMap Overpass API.
-/// No API key is required.
+/// Caches results for offline use.
 class NearbyPlacesService {
   static const String _overpassUrl =
       'https://overpass-api.de/api/interpreter';
+  static const String _cacheKey = 'nearby_places_cache';
 
   /// Search radius in meters (20 km).
   static const double _searchRadiusMeters = 20000;
@@ -18,6 +21,12 @@ class NearbyPlacesService {
     double lat,
     double lng,
   ) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!NetworkService().isOnline) {
+      return _readCache(prefs);
+    }
+
     final query = '''
 [out:json][timeout:25];
 (
@@ -29,23 +38,24 @@ class NearbyPlacesService {
 out center;
 ''';
 
-    final response = await http.post(
-      Uri.parse(_overpassUrl),
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'AI Smart SOS/1.0',
-        'Accept': 'application/json',
-      },
-      body: {
-        'data': query,
-      },
-    );
+    try {
+      final response = await http.post(
+        Uri.parse(_overpassUrl),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'AI Smart SOS/1.0',
+          'Accept': 'application/json',
+        },
+        body: {
+          'data': query,
+        },
+      ).timeout(const Duration(seconds: 15));
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to fetch nearby places (${response.statusCode})');
-    }
+      if (response.statusCode != 200) {
+        throw Exception('Failed to fetch nearby places (${response.statusCode})');
+      }
 
-    final data = json.decode(response.body);
+      final data = json.decode(response.body);
     final elements = data['elements'] as List;
     const distance = Distance();
     final userLocation = LatLng(lat, lng);
@@ -115,7 +125,34 @@ out center;
       return a.priority.compareTo(b.priority);
     });
     
-    return places;
+      // Save to cache
+      await _updateCache(prefs, places);
+      return places;
+
+    } catch (e) {
+      // Fallback to cache on error
+      final cached = await _readCache(prefs);
+      if (cached.isNotEmpty) {
+        return cached;
+      }
+      throw Exception('Nearby emergency services require an internet connection.');
+    }
+  }
+
+  static Future<List<NearbyPlace>> _readCache(SharedPreferences prefs) async {
+    final encoded = prefs.getString(_cacheKey);
+    if (encoded == null || encoded.isEmpty) return [];
+    try {
+      final List<dynamic> list = json.decode(encoded);
+      return list.map((e) => NearbyPlace.fromJson(e)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<void> _updateCache(SharedPreferences prefs, List<NearbyPlace> places) async {
+    final encoded = json.encode(places.map((p) => p.toJson()).toList());
+    await prefs.setString(_cacheKey, encoded);
   }
 
   static PlaceType _determineType(Map<String, dynamic> tags) {

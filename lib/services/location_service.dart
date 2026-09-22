@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'network_service.dart';
 
 /// Enhanced location service providing GPS position, Google Maps links,
 /// and structured location data for SOS alerts.
@@ -118,12 +119,16 @@ class LocationService {
 
   /// Reverse geocodes using OpenStreetMap Nominatim
   static Future<String?> getAddressFromCoordinates(double lat, double lng) async {
+    if (!NetworkService().isOnline) {
+      return "Address unavailable offline";
+    }
+    
     try {
       final url = Uri.parse(
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1');
       final response = await http.get(url, headers: {
         'User-Agent': 'AI Smart SOS/1.0',
-      });
+      }).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

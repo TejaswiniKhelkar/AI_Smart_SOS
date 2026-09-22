@@ -8,6 +8,8 @@ import 'settings_service.dart';
 import 'contact_service.dart';
 import 'ai_api_service.dart';
 
+import 'network_service.dart';
+
 /// Builds and sends emergency SMS messages with enriched profile data.
 class SmsService {
   /// Builds the emergency SMS message.
@@ -84,12 +86,16 @@ class SmsService {
   }
 
   /// Sends the emergency SMS message via the backend provider.
-  /// Returns a status string: 'sent', 'failed_no_provider', or 'failed'.
+  /// Returns a status string: 'sent', 'failed_no_provider', 'queued', or 'failed'.
   static Future<String> sendEmergencySMS({
     required double latitude,
     required double longitude,
     required String googleMapsLink,
   }) async {
+    if (!NetworkService().isOnline) {
+      return 'queued';
+    }
+
     final message = await buildEmergencyMessage(
       latitude: latitude,
       longitude: longitude,

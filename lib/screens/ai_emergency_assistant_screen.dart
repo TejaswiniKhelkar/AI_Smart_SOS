@@ -8,6 +8,7 @@ import '../services/nearby_places_service.dart';
 import '../services/profile_service.dart';
 import '../services/ai_api_service.dart';
 import '../services/assistant_settings_service.dart';
+import '../services/network_service.dart';
 import 'ai_profile_screen.dart';
 import 'emergency_contacts_screen.dart';
 
@@ -100,10 +101,17 @@ class _AiEmergencyAssistantScreenState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Check backend availability
-    AiApiService().ping().then((ok) {
-      if (mounted) setState(() => _backendAvailable = ok);
-    });
+    _checkBackendAvailability();
+  }
+  
+  Future<void> _checkBackendAvailability() async {
+    if (!NetworkService().isOnline) {
+      if (mounted) setState(() => _backendAvailable = false);
+      return;
+    }
+    
+    final ok = await AiApiService().ping();
+    if (mounted) setState(() => _backendAvailable = ok);
   }
 
   @override
@@ -475,8 +483,9 @@ class _AiEmergencyAssistantScreenState
           Expanded(
             child: TextField(
               controller: _inputController,
+              enabled: _backendAvailable,
               decoration: InputDecoration(
-                hintText: 'Type your emergency...',
+                hintText: _backendAvailable ? 'Type your emergency...' : 'AI Assistant requires internet.',
                 hintStyle: AppTheme.bodyMedium.copyWith(color: AppTheme.textMuted),
                 filled: true,
                 fillColor: AppTheme.background,
@@ -487,20 +496,20 @@ class _AiEmergencyAssistantScreenState
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               ),
               style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary),
-              onSubmitted: _sendMessage,
+              onSubmitted: _backendAvailable ? _sendMessage : null,
             ),
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: () => _sendMessage(_inputController.text),
+            onTap: () => _backendAvailable ? _sendMessage(_inputController.text) : null,
             child: Container(
               width: 52,
               height: 52,
-              decoration: const BoxDecoration(
-                color: AppTheme.primaryCyan,
+              decoration: BoxDecoration(
+                color: _backendAvailable ? AppTheme.primaryCyan : AppTheme.glassBorder,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 24),
+              child: Icon(Icons.send_rounded, color: _backendAvailable ? Colors.white : AppTheme.textMuted, size: 24),
             ),
           ),
         ],

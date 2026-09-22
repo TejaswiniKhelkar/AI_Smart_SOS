@@ -10,6 +10,8 @@ import 'services/accelerometer_service.dart';
 import 'services/gyroscope_service.dart';
 import 'services/impact_detection_service.dart';
 import 'services/accident_motion_detector.dart';
+import 'services/network_service.dart';
+import 'services/sync_queue_service.dart';
 
 @pragma('vm:entry-point')
 void backgroundMain() {
@@ -92,6 +94,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  NetworkService().init();
+  SyncQueueService().init();
+  
   runApp(const SmartSOSApp());
 }
 

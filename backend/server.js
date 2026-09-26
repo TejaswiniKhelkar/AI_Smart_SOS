@@ -4,7 +4,12 @@ import dotenv from 'dotenv';
 
 // Use native fetch in Node 18+. If your Node version lacks fetch, install node-fetch.
 
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 app.use(cors());

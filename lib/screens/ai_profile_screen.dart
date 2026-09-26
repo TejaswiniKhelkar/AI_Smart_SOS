@@ -151,10 +151,10 @@ class _AiProfileScreenState extends State<AiProfileScreen>
             colorScheme: const ColorScheme.light(
               primary: AppTheme.primaryCyan,
               onPrimary: Colors.white,
-              surface: AppTheme.surface,
-              onSurface: AppTheme.textPrimary,
+              surface: Colors.white,
+              onSurface: Colors.black,
             ),
-            dialogBackgroundColor: AppTheme.surface,
+            dialogTheme: const DialogThemeData(backgroundColor: Colors.white),
           ),
           child: child!,
         );

@@ -1,7 +1,4 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../app_theme.dart';
 import '../models/sos_alert.dart';
 import '../services/alert_service.dart';
@@ -20,7 +17,6 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
   late AnimationController _particleController;
   late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
@@ -34,10 +30,6 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOutCubic,
     );
 
     _loadAlerts();
@@ -59,72 +51,8 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
     _fadeController.forward();
   }
 
-  void _confirmClearHistory() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Clear History', style: AppTheme.headingSmall),
-        content: Text(
-          'This will permanently delete all alert records. Continue?',
-          style: AppTheme.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel',
-                style: AppTheme.bodyMedium.copyWith(color: AppTheme.textMuted)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await AlertService.clearHistory();
-              _loadAlerts();
-            },
-            child: Text('Clear All',
-                style: AppTheme.bodyMedium
-                    .copyWith(color: AppTheme.emergencyRed)),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Future<void> _openMapsLink(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
 
-  Color _alertTypeColor(String type) {
-    switch (type) {
-      case 'Police':
-        return const Color(0xFF448AFF);
-      case 'Ambulance':
-        return AppTheme.emergencyRed;
-      case 'Fire':
-        return AppTheme.warningAmber;
-      default:
-        return AppTheme.emergencyRed;
-    }
-  }
-
-  IconData _alertTypeIcon(String type) {
-    switch (type) {
-      case 'Police':
-        return Icons.local_police_outlined;
-      case 'Ambulance':
-        return Icons.local_hospital_outlined;
-      case 'Fire':
-        return Icons.local_fire_department_outlined;
-      default:
-        return Icons.sos;
-    }
-  }
-
-  @override
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -263,34 +191,73 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          Text(
+            'Contacts Notified:',
+            style: AppTheme.bodySmall.copyWith(color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          if (alert.contactDeliveryStatuses != null && alert.contactDeliveryStatuses!.isNotEmpty)
+            ...alert.contactDeliveryStatuses!.map((c) {
+              final status = c['status'] as String? ?? 'failed';
+              IconData icon = Icons.error_outline;
+              Color color = AppTheme.emergencyRed;
+              String statusText = 'Failed';
+              
+              if (status == 'sent') {
+                icon = Icons.check_circle_outline;
+                color = AppTheme.successGreen;
+                statusText = 'Sent';
+              } else if (status == 'queued') {
+                icon = Icons.access_time;
+                color = AppTheme.warningAmber;
+                statusText = 'Queued';
+              }
+              
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(icon, color: color, size: 14),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${c['name']} — $statusText',
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            })
+          else
+            Text(
+              'No detailed contact status available',
+              style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+            ),
           const SizedBox(height: 8),
           Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Icon(
-                alert.smsDeliveryStatus == 'sent'
-                    ? Icons.mark_email_read
-                    : Icons.error_outline,
-                color: alert.smsDeliveryStatus == 'sent'
-                    ? AppTheme.successGreen
-                    : (alert.smsDeliveryStatus == 'failed_no_provider'
-                        ? AppTheme.warningAmber
-                        : AppTheme.emergencyRed),
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: alert.smsDeliveryStatus == 'sent'
+                      ? AppTheme.successGreen.withValues(alpha: 0.1)
+                      : (alert.smsDeliveryStatus == 'queued'
+                          ? AppTheme.warningAmber.withValues(alpha: 0.1)
+                          : AppTheme.emergencyRed.withValues(alpha: 0.1)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Text(
-                  alert.smsDeliveryStatus == 'sent'
-                      ? 'SMS Delivered'
-                      : (alert.smsDeliveryStatus == 'failed_no_provider'
-                          ? 'SMS Not Sent (Provider missing)'
-                          : 'SMS Failed'),
+                  'Sync: ${alert.smsDeliveryStatus == 'queued' ? 'Queued' : 'Synced'}',
                   style: AppTheme.bodySmall.copyWith(
                     color: alert.smsDeliveryStatus == 'sent'
                         ? AppTheme.successGreen
-                        : (alert.smsDeliveryStatus == 'failed_no_provider'
+                        : (alert.smsDeliveryStatus == 'queued'
                             ? AppTheme.warningAmber
                             : AppTheme.emergencyRed),
+                    fontSize: 10,
                   ),
                 ),
               ),

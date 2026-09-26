@@ -38,7 +38,6 @@ class _AiEmergencyDashboardScreenState
   // ── Dashboard state ─────────────────────────────────────────────────────
   bool _backendAvailable = false;
   String _assistantLanguage = 'en';
-  String _assistantTheme = 'system';
   String _currentLocationLabel = 'Fetching...';
   int _hospitalCount = 0;
   int _policeCount = 0;
@@ -100,11 +99,9 @@ class _AiEmergencyDashboardScreenState
 
   Future<void> _loadAssistantSettings() async {
     final lang = await AssistantSettingsService.getLanguage();
-    final theme = await AssistantSettingsService.getTheme();
     if (mounted) {
       setState(() {
         _assistantLanguage = lang;
-        _assistantTheme = theme;
       });
     }
   }
@@ -336,105 +333,7 @@ class _AiEmergencyDashboardScreenState
     );
   }
 
-  // ── Location bottom-sheet ───────────────────────────────────────────────
 
-  Future<void> _showCurrentLocation() async {
-    try {
-      final location = await LocationService.getLocationData();
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (context) {
-          return Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surface.withValues(alpha: 0.96),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sheetHandle(),
-                const SizedBox(height: 16),
-                Text('Current Location',
-                    style: AppTheme.headingSmall.copyWith(fontSize: 18)),
-                const SizedBox(height: 12),
-                Text(
-                    'Lat: ${location.latitude.toStringAsFixed(6)}  ·  Lng: ${location.longitude.toStringAsFixed(6)}',
-                    style: AppTheme.bodySmall),
-                const SizedBox(height: 6),
-                Text('Updated: ${location.timestamp}',
-                    style: AppTheme.bodySmall),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryCyan,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: () => _launchUrl(location.googleMapsLink),
-                    child: const Text('Open in Maps'),
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
-            ),
-          );
-        },
-      );
-    } catch (_) {
-      if (!mounted) return;
-      await _showInfoSheet('Location unavailable',
-          'Unable to retrieve your current location. Please enable location services and try again.');
-    }
-  }
-
-  // ── Navigation helpers ──────────────────────────────────────────────────
-
-  void _openEmergencyContacts() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const EmergencyContactsScreen()));
-  }
-
-  void _openMyProfile() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const AiProfileScreen()));
-  }
-
-  void _showSosReminder() {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppTheme.surface,
-          title: Text('Use SOS for serious emergencies',
-              style: AppTheme.headingSmall),
-          content: Text(
-            'For life-threatening situations, press the main SOS button on the home screen or call emergency services immediately. This assistant is for guidance and does not replace professional responders.',
-            style: AppTheme.bodySmall,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: const Text('Go Home'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   Future<void> _showInfoSheet(String title, String message) async {
     await showModalBottomSheet<void>(
@@ -839,12 +738,22 @@ class _AiEmergencyDashboardScreenState
   }
 
   Widget _buildMessageList() {
-    return ListView.separated(
+    return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      itemCount: _messages.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _buildChatBubble(_messages[i]),
+      itemCount: _messages.length + (_isSending ? 1 : 0),
+      itemBuilder: (_, i) {
+        if (i == _messages.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: _buildChatBubble(_ChatMessage(role: _MessageRole.ai, text: 'Thinking...')),
+          );
+        }
+        return Padding(
+          padding: EdgeInsets.only(top: i == 0 ? 0 : 8.0),
+          child: _buildChatBubble(_messages[i]),
+        );
+      },
     );
   }
 

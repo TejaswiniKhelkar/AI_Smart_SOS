@@ -27,6 +27,19 @@ class MainActivity : FlutterActivity() {
 
     private var uiChannel: MethodChannel? = null
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -51,6 +64,25 @@ class MainActivity : FlutterActivity() {
                 }
                 "isServiceRunning" -> {
                     result.success(AccidentDetectionForegroundService.isRunning)
+                }
+                "checkSensorHealth" -> {
+                    if (!AccidentDetectionForegroundService.isRunning) {
+                        result.success("inactive")
+                        return@setMethodCallHandler
+                    }
+                    if (!AccidentDetectionForegroundService.hasAccelerometer || !AccidentDetectionForegroundService.hasGyroscope) {
+                        result.success("unavailable")
+                        return@setMethodCallHandler
+                    }
+                    val now = System.currentTimeMillis()
+                    val accelActive = (now - AccidentDetectionForegroundService.lastAccelTimeMs) < 3000
+                    val gyroActive = (now - AccidentDetectionForegroundService.lastGyroTimeMs) < 3000
+                    
+                    if (accelActive && gyroActive) {
+                        result.success("active")
+                    } else {
+                        result.success("failed")
+                    }
                 }
                 "showAccidentAlert" -> {
                     // Bring the app to foreground via high-priority notification

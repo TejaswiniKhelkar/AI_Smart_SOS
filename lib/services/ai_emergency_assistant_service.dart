@@ -26,37 +26,32 @@ class AiEmergencyAssistantService {
     }
 
     // Check backend reachability first
+    try {
+      final api = AiApiService();
+      final reachable = await api.ping();
+      
+      if (!reachable) {
+        throw Exception('AI service is offline or unreachable.');
+      }
+
       try {
-        final api = AiApiService();
-        final reachable = await api.ping();
-        if (reachable) {
-          try {
-            final response = await api.fetchResponse(
-              message,
-              profile: profile,
-              location: location,
-              nearbyPlaces: nearbyPlaces,
-              language: language,
-            );
-            if (response.isNotEmpty) return response.trim();
-          } catch (_) {
-            // backend error — fall back locally
-          }
-        }
-      } catch (_) {
-        // ping failed — use local fallback
+        final response = await api.fetchResponse(
+          message,
+          profile: profile,
+          location: location,
+          nearbyPlaces: nearbyPlaces,
+          language: language,
+        );
+        if (response.isNotEmpty) return response.trim();
+        throw Exception('Received empty response from AI service.');
+      } catch (e) {
+        throw Exception('AI service error: $e');
       }
-
-    // Local fallback
-    return Future.delayed(const Duration(milliseconds: 250), () {
-      final fallback = _localResponse(message);
-      if (fallback == _defaultResponse()) {
-        throw Exception('API failed and no specific local fallback is available.');
-      }
-      return fallback;
-    });
+    } catch (e) {
+      // Re-throw so the UI can show a truthful error message
+      throw Exception(e.toString());
+    }
   }
-
 
   String _localResponse(String prompt) {
     final text = prompt.toLowerCase();

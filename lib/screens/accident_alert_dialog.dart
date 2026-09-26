@@ -10,7 +10,11 @@ import '../services/contact_service.dart';
 import '../services/emergency_alert_sound_service.dart';
 import '../services/emergency_vibration_service.dart';
 import '../services/location_service.dart';
+import '../services/network_service.dart';
+import '../services/sync_queue_service.dart';
+import '../services/live_location_service.dart';
 import '../services/sms_service.dart';
+import '../models/emergency_contact.dart';
 
 /// Full-screen emergency accident detection alert with a 30-second countdown.
 ///
@@ -42,6 +46,9 @@ class AccidentAlertDialog extends StatefulWidget {
           AccidentAlertDialog(onSendSOS: onSendSOS),
     );
   }
+
+  /// Global access to the currently showing dialog state.
+  static _AccidentAlertDialogState? currentState;
 
   @override
   State<AccidentAlertDialog> createState() => _AccidentAlertDialogState();
@@ -90,11 +97,13 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
   String _sosMessage = '';
   int _sosContactCount = 0;
   bool _sosSaving = false;
-  String _smsStatus = 'pending';
+  SmsDeliveryResult? _smsResult;
+  List<EmergencyContact>? _notifiedContacts;
 
   @override
   void initState() {
     super.initState();
+    AccidentAlertDialog.currentState = this;
 
     // ── Countdown (drives the circular ring) ──
     _countdownAnim = AnimationController(
@@ -232,6 +241,9 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
 
   @override
   void dispose() {
+    if (AccidentAlertDialog.currentState == this) {
+      AccidentAlertDialog.currentState = null;
+    }
     _ticker?.cancel();
     _clockTimer?.cancel();
     _confirmationDismissTimer?.cancel();
@@ -249,7 +261,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
     super.dispose();
   }
 
-  void _dismissSafe() {
+  void dismissSafe() {
     if (_dismissed) return;
     _dismissed = true;
     _ticker?.cancel();
@@ -259,7 +271,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
     Navigator.of(context).pop();
   }
 
-  void _sendSOS() {
+  void sendSOS() {
     if (_dismissed || _showSOSTriggered) return;
     _triggerSOSConfirmation();
   }
@@ -299,36 +311,72 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
           '\ud83d\udc65 Emergency contacts notified: ${contacts.length}\n\n'
           'Sent via AI Smart SOS';
 
+      final eventId = DateTime.now().millisecondsSinceEpoch.toString();
+
       // 5. Send actual SMS via Backend
-      String smsStatus = 'pending';
+      SmsDeliveryResult? smsResult;
       try {
-        smsStatus = await SmsService.sendEmergencySMS(
+        smsResult = await SmsService.sendEmergencySMS(
+          eventId: eventId,
           latitude: data.latitude,
           longitude: data.longitude,
           googleMapsLink: data.googleMapsLink,
         );
       } catch (e) {
-        smsStatus = 'failed';
+        smsResult = SmsDeliveryResult(overallStatus: 'failed', contactStatuses: {});
       }
 
       // 6. Save alert to history
+      final contactStatuses = <Map<String, dynamic>>[];
+      for (var c in contacts) {
+        final num = SmsService.formatPhoneNumber(c.phone);
+        final status = smsResult.contactStatuses[num] ?? 'failed';
+        contactStatuses.add({
+          'name': c.name,
+          'phone': num,
+          'status': status,
+        });
+      }
+
       final alert = SosAlert(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: eventId,
         timestamp: DateTime.now(),
         latitude: data.latitude,
         longitude: data.longitude,
         googleMapsLink: data.googleMapsLink,
         alertType: 'Accident',
-        smsDeliveryStatus: smsStatus,
+        smsDeliveryStatus: smsResult.overallStatus,
+        contactDeliveryStatuses: contactStatuses,
       );
       await AlertService.saveAlert(alert);
+
+      // 7. Enqueue SMS delivery task if queued or failed
+      if (smsResult.overallStatus == 'queued' || smsResult.overallStatus == 'failed') {
+        await SyncQueueService().enqueue(
+          QueueItem(
+            id: 'sms_$eventId',
+            type: QueueItemType.smsDelivery, // To be added in SyncQueueService
+            timestamp: DateTime.now(),
+            payload: {
+              'eventId': eventId,
+              'latitude': data.latitude,
+              'longitude': data.longitude,
+              'googleMapsLink': data.googleMapsLink,
+            },
+          ),
+        );
+      }
+
+      // Start live tracking session
+      LiveLocationService().startSharing(eventId);
 
       if (mounted) {
         setState(() {
           _sosLocationData = data;
           _sosMessage = message;
           _sosContactCount = contacts.length;
-          _smsStatus = smsStatus;
+          _smsResult = smsResult;
+          _notifiedContacts = contacts;
           _sosSaving = false;
         });
       }
@@ -341,7 +389,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
               'Location could not be determined.\n\n'
               '\u23f0 Time: ${DateFormat('hh:mm:ss a').format(DateTime.now())}\n\n'
               'Sent via AI Smart SOS';
-          _smsStatus = 'failed';
+          _smsResult = SmsDeliveryResult(overallStatus: 'failed', contactStatuses: {});
           _sosSaving = false;
         });
       }
@@ -378,7 +426,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'EMERGENCY ALERT ACTIVE',
+                'Possible Accident Detected',
                 style: AppTheme.headingSmall.copyWith(
                   color: AppTheme.emergencyRed,
                   letterSpacing: 1.5,
@@ -425,17 +473,17 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: _smsStatus == 'sent'
+                        color: _smsResult?.overallStatus == 'sent'
                             ? AppTheme.successGreen.withValues(alpha: 0.1)
-                            : (_smsStatus == 'queued' ? AppTheme.warningAmber.withValues(alpha: 0.1) : AppTheme.warningAmber.withValues(alpha: 0.1)),
+                            : (_smsResult?.overallStatus == 'queued' ? AppTheme.warningAmber.withValues(alpha: 0.1) : AppTheme.warningAmber.withValues(alpha: 0.1)),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        _smsStatus == 'sent'
+                        _smsResult?.overallStatus == 'sent'
                             ? 'SENT'
-                            : (_smsStatus == 'queued' ? 'QUEUED' : (_smsStatus == 'failed_no_provider' ? 'NOT SENT' : 'FAILED')),
+                            : (_smsResult?.overallStatus == 'queued' ? 'QUEUED' : (_smsResult?.overallStatus == 'failed_no_provider' ? 'NOT SENT' : 'FAILED')),
                         style: AppTheme.bodySmall.copyWith(
-                          color: _smsStatus == 'sent'
+                          color: _smsResult?.overallStatus == 'sent'
                               ? AppTheme.successGreen
                               : AppTheme.warningAmber,
                           fontWeight: FontWeight.w700,
@@ -445,16 +493,63 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      _smsStatus == 'sent'
+                      _smsResult?.overallStatus == 'sent'
                           ? 'Trusted contacts have been notified with your emergency status.'
-                          : (_smsStatus == 'queued'
+                          : (_smsResult?.overallStatus == 'queued'
                               ? 'Network unavailable.\nEmergency alert saved and queued.'
-                              : (_smsStatus == 'failed_no_provider'
+                              : (_smsResult?.overallStatus == 'failed_no_provider'
                               ? 'Alert logged locally.\nSMS Provider credentials missing in backend.'
                               : 'Alert logged locally. SMS delivery failed.')),
                       textAlign: TextAlign.center,
                       style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
                     ),
+                    if (_notifiedContacts != null && _notifiedContacts!.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 180),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _notifiedContacts!.length,
+                          itemBuilder: (ctx, i) {
+                            final c = _notifiedContacts![i];
+                            final num = SmsService.formatPhoneNumber(c.phone);
+                            final status = _smsResult?.contactStatuses[num] ?? 'failed';
+                            
+                            IconData icon = Icons.error_outline;
+                            Color color = AppTheme.emergencyRed;
+                            String statusText = 'Failed';
+                            
+                            if (status == 'sent') {
+                              icon = Icons.check_circle_outline;
+                              color = AppTheme.successGreen;
+                              statusText = 'Sent';
+                            } else if (status == 'queued') {
+                              icon = Icons.access_time;
+                              color = AppTheme.warningAmber;
+                              statusText = 'Queued';
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Icon(icon, color: color, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '${c.name} — $statusText',
+                                      style: AppTheme.bodySmall.copyWith(color: AppTheme.textPrimary),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               const SizedBox(height: 16),
@@ -473,29 +568,75 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
                 ],
               ),
               const SizedBox(height: 40),
-              GestureDetector(
-                onTap: _dismissSafe,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.check, color: AppTheme.successGreen, size: 24),
-                      const SizedBox(width: 12),
-                      Text(
-                        'I\'M SAFE — CANCEL ALERT',
-                        style: AppTheme.buttonText.copyWith(color: AppTheme.successGreen),
+              if (!_showSOSTriggered && !_sosSaving)
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: dismissSafe,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successGreen.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
+                          ),
+                          child: const Icon(Icons.check, color: AppTheme.successGreen, size: 28),
+                        ),
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 2,
+                      child: GestureDetector(
+                        onTap: sendSOS,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: AppTheme.emergencyRed.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppTheme.emergencyRed.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.sos, color: AppTheme.emergencyRed, size: 24),
+                              const SizedBox(width: 8),
+                              Text(
+                                'SEND SOS NOW',
+                                style: AppTheme.buttonText.copyWith(color: AppTheme.emergencyRed),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else if (_showSOSTriggered || _sosSaving)
+                GestureDetector(
+                  onTap: dismissSafe,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      color: AppTheme.successGreen.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check, color: AppTheme.successGreen, size: 24),
+                        const SizedBox(width: 12),
+                        Text(
+                          'I\'M SAFE — DISMISS',
+                          style: AppTheme.buttonText.copyWith(color: AppTheme.successGreen),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),

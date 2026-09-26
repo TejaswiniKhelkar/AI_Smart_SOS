@@ -4,8 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'network_service.dart';
 import 'alert_service.dart';
 import 'contact_service.dart';
+import 'sms_service.dart';
+import 'live_location_service.dart';
 
-enum QueueItemType { sosAlert, contactSync, contactAdd, contactUpdate, contactDelete }
+enum QueueItemType { sosAlert, contactSync, contactAdd, contactUpdate, contactDelete, smsDelivery, liveLocation }
 enum QueueItemStatus { pending, syncing, failed }
 
 class QueueItem {
@@ -80,6 +82,55 @@ class SyncQueueService {
     
     registerHandler(QueueItemType.contactSync, (payload) async {
       return await ContactService.syncContactsToFirebase(payload);
+    });
+
+    registerHandler(QueueItemType.smsDelivery, (payload) async {
+      final eventId = payload['eventId'] as String;
+      final latitude = payload['latitude'] as double;
+      final longitude = payload['longitude'] as double;
+      final googleMapsLink = payload['googleMapsLink'] as String;
+
+      final result = await SmsService.sendEmergencySMS(
+        eventId: eventId,
+        latitude: latitude,
+        longitude: longitude,
+        googleMapsLink: googleMapsLink,
+      );
+
+      if (result.overallStatus == 'sent' || result.overallStatus == 'failed_no_provider') {
+        // Successfully processed (even if no provider, we don't retry)
+        // Update the SosAlert history if it exists
+        final alerts = await AlertService.getAlerts();
+        final index = alerts.indexWhere((a) => a.id == eventId);
+        if (index != -1) {
+          final alert = alerts[index];
+          
+          final contactStatuses = <Map<String, dynamic>>[];
+          final contacts = await ContactService.getContacts();
+          for (var c in contacts) {
+            final num = SmsService.formatPhoneNumber(c.phone);
+            final status = result.contactStatuses[num] ?? 'failed';
+            contactStatuses.add({
+              'name': c.name,
+              'phone': num,
+              'status': status,
+            });
+          }
+
+          final updatedAlert = alert.copyWith(
+            smsDeliveryStatus: result.overallStatus,
+            contactDeliveryStatuses: contactStatuses,
+          );
+          await AlertService.saveAlert(updatedAlert);
+        }
+        return true;
+      }
+      
+      return false; // Retry later
+    });
+
+    registerHandler(QueueItemType.liveLocation, (payload) async {
+      return await LiveLocationService.syncLocationToFirebase(payload);
     });
 
     NetworkService().onStatusChanged.listen((status) {

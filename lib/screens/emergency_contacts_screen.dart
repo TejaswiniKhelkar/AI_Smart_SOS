@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app_theme.dart';
 import '../models/emergency_contact.dart';
 import '../services/contact_service.dart';
@@ -273,15 +274,15 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                             );
                             final success =
                                 await ContactService.addContact(contact);
-                            if (!success && mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                            if (!success && ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    'Emergency contact saved successfully.',
+                                    'Contact with this number already exists.',
                                     style: AppTheme.bodyMedium
                                         .copyWith(color: Colors.white),
                                   ),
-                                  backgroundColor: AppTheme.warningAmber,
+                                  backgroundColor: AppTheme.emergencyRed,
                                   behavior: SnackBarBehavior.floating,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -557,97 +558,134 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => _showAddEditSheet(existing: contact),
-          onLongPress: () => _confirmDelete(contact),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                // Avatar
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accentColor.withValues(alpha: 0.12),
-                    border: Border.all(
-                        color: accentColor.withValues(alpha: 0.25), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentColor.withValues(alpha: 0.15),
-                        blurRadius: 12,
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      contact.name.isNotEmpty
-                          ? contact.name[0].toUpperCase()
-                          : '?',
-                      style: AppTheme.headingSmall.copyWith(
-                        color: accentColor,
-                        fontSize: 22,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  // Avatar
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accentColor.withValues(alpha: 0.12),
+                      border: Border.all(
+                          color: accentColor.withValues(alpha: 0.25), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accentColor.withValues(alpha: 0.15),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        contact.name.isNotEmpty
+                            ? contact.name[0].toUpperCase()
+                            : '?',
+                        style: AppTheme.headingSmall.copyWith(
+                          color: accentColor,
+                          fontSize: 22,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-
-                // Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        contact.name,
-                        style: AppTheme.bodyLarge.copyWith(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(width: 16),
+  
+                  // Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          contact.name,
+                          style: AppTheme.bodyLarge.copyWith(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.phone_outlined,
-                              size: 14, color: AppTheme.textMuted),
-                          const SizedBox(width: 6),
-                          Text(contact.phone, style: AppTheme.bodySmall),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Relationship badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: accentColor.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_relationIcon(contact.relationship),
-                          size: 14, color: accentColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        contact.relationship,
-                        style: AppTheme.bodySmall.copyWith(
-                          color: accentColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.phone_outlined,
+                                size: 14, color: AppTheme.textMuted),
+                            const SizedBox(width: 6),
+                            Text(contact.phone, style: AppTheme.bodySmall),
+                          ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+  
+                  // Relationship badge
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_relationIcon(contact.relationship),
+                            size: 14, color: accentColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          contact.relationship,
+                          style: AppTheme.bodySmall.copyWith(
+                            color: accentColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Action Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      final url = Uri.parse('tel:${contact.phone}');
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url);
+                      }
+                    },
+                    icon: const Icon(Icons.call, color: AppTheme.successGreen, size: 18),
+                    label: Text('Call', style: AppTheme.bodyMedium.copyWith(color: AppTheme.successGreen)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      backgroundColor: AppTheme.successGreen.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => _showAddEditSheet(existing: contact),
+                    icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryCyan, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppTheme.primaryCyan.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => _confirmDelete(contact),
+                    icon: const Icon(Icons.delete_outline, color: AppTheme.emergencyRed, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppTheme.emergencyRed.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

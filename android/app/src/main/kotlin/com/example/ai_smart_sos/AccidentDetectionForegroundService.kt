@@ -64,6 +64,18 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
         @Volatile
         var isRunning = false
             private set
+
+        @Volatile
+        var lastAccelTimeMs = 0L
+
+        @Volatile
+        var lastGyroTimeMs = 0L
+
+        @Volatile
+        var hasAccelerometer = true
+
+        @Volatile
+        var hasGyroscope = true
     }
 
     // ── Sensor handles ───────────────────────────────────────────────────
@@ -86,6 +98,26 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
     private var lastAccelForwardMs = 0L
     private var lastGyroForwardMs  = 0L
     private val minForwardIntervalMs = 20L
+
+    // ── Health Check ─────────────────────────────────────────────────────
+    private val healthCheckHandler = Handler(Looper.getMainLooper())
+    private val healthCheckRunnable = object : Runnable {
+        override fun run() {
+            if (!isRunning) return
+            
+            val now = System.currentTimeMillis()
+            // Give 3 seconds timeout
+            val accelDead = hasAccelerometer && (now - lastAccelTimeMs) > 3000
+            val gyroDead = hasGyroscope && (now - lastGyroTimeMs) > 3000
+            
+            if (accelDead || gyroDead) {
+                Log.w(TAG, "Sensor heartbeat failed. AccelDead=$accelDead, GyroDead=$gyroDead. Attempting listener recovery...")
+                stopSensorListening()
+                startSensorListening()
+            }
+            healthCheckHandler.postDelayed(this, 3000)
+        }
+    }
 
     // ═════════════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -138,6 +170,20 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
                 showAccidentAlert()
                 return START_STICKY
             }
+            "ACTION_CANCEL_ALERT" -> {
+                dismissAccidentAlert()
+                mainHandler.post {
+                    methodChannel?.invokeMethod("cancelAccidentAlert", null)
+                }
+                return START_STICKY
+            }
+            "ACTION_SEND_SOS" -> {
+                dismissAccidentAlert()
+                mainHandler.post {
+                    methodChannel?.invokeMethod("triggerImmediateSOS", null)
+                }
+                return START_STICKY
+            }
             "SIMULATE_TEST_ACCIDENT" -> {
                 mainHandler.post {
                     backgroundMethodChannel?.invokeMethod("simulateTestAccident", null)
@@ -148,9 +194,12 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
 
         // Normal start — only start once
         if (!isRunning) {
+            lastAccelTimeMs = System.currentTimeMillis()
+            lastGyroTimeMs = System.currentTimeMillis()
             startForegroundWithNotification()
             startSensorListening()
             isRunning = true
+            healthCheckHandler.postDelayed(healthCheckRunnable, 3000)
             Log.d(TAG, "Service started (sensors active)")
         } else {
             Log.d(TAG, "Service already running — ignoring duplicate start")
@@ -160,6 +209,7 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        healthCheckHandler.removeCallbacks(healthCheckRunnable)
         stopSensorListening()
         releaseWakeLock()
         
@@ -259,6 +309,9 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
         accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         gyroscope     = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
+        hasAccelerometer = (accelerometer != null)
+        hasGyroscope = (gyroscope != null)
+
         accelerometer?.let {
             try {
                 sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
@@ -295,6 +348,7 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
 
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
+                lastAccelTimeMs = now
                 if (now - lastAccelForwardMs < minForwardIntervalMs) return
                 lastAccelForwardMs = now
 
@@ -313,6 +367,7 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
             }
 
             Sensor.TYPE_GYROSCOPE -> {
+                lastGyroTimeMs = now
                 if (now - lastGyroForwardMs < minForwardIntervalMs) return
                 lastGyroForwardMs = now
 
@@ -385,9 +440,25 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val cancelIntent = Intent(this, AccidentDetectionForegroundService::class.java).apply {
+            action = "ACTION_CANCEL_ALERT"
+        }
+        val cancelPendingIntent = PendingIntent.getService(
+            this, 2, cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val sendSosIntent = Intent(this, AccidentDetectionForegroundService::class.java).apply {
+            action = "ACTION_SEND_SOS"
+        }
+        val sendSosPendingIntent = PendingIntent.getService(
+            this, 3, sendSosIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-            .setContentTitle("⚠️ Accident Detected!")
-            .setContentText("Tap to open SOS countdown")
+            .setContentTitle("Possible Accident Detected")
+            .setContentText("Emergency alert in 30 seconds")
             .setSmallIcon(R.drawable.ic_sos_notification)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -395,6 +466,8 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
             .setAutoCancel(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setVibrate(longArrayOf(0, 500, 200, 500))
+            .addAction(0, "I'm Safe / Cancel", cancelPendingIntent)
+            .addAction(0, "Send SOS Now", sendSosPendingIntent)
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)

@@ -106,6 +106,8 @@ class _LoginScreenState extends State<LoginScreen>
 
     final isVerified = await AuthService.isEmailVerified();
 
+    if (!mounted) return;
+
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(

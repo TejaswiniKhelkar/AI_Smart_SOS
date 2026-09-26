@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'accelerometer_service.dart';
-import 'gyroscope_service.dart';
+import '../screens/accident_alert_dialog.dart';
+
 
 /// Flutter-side bridge to the native Android
 /// [AccidentDetectionForegroundService].
@@ -22,10 +22,7 @@ class ForegroundSensorBridge {
   static const _channel =
       MethodChannel('com.example.ai_smart_sos/foreground_sensor');
 
-  // ── References to the existing Dart sensor services ─────────────────
 
-  AccelerometerService? _accelerometerService;
-  GyroscopeService? _gyroscopeService;
 
   // ── State ───────────────────────────────────────────────────────────
 
@@ -57,6 +54,10 @@ class ForegroundSensorBridge {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onAccidentAlertFromIntent') {
         onAccidentDetected?.call();
+      } else if (call.method == 'cancelAccidentAlert') {
+        AccidentAlertDialog.currentState?.dismissSafe();
+      } else if (call.method == 'triggerImmediateSOS') {
+        AccidentAlertDialog.currentState?.sendSOS();
       }
     });
 
@@ -136,6 +137,21 @@ class ForegroundSensorBridge {
       debugPrint('[FgSensorBridge] Native crash simulation triggered.');
     } catch (e) {
       debugPrint('[FgSensorBridge] Failed to simulate accident: $e');
+    }
+  }
+
+  /// Checks the runtime health of the native sensor service.
+  /// Returns 'active', 'inactive', 'failed', or 'unavailable'
+  Future<String> checkSensorHealth() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return 'unavailable';
+    }
+    try {
+      final status = await _channel.invokeMethod<String>('checkSensorHealth');
+      return status ?? 'inactive';
+    } catch (e) {
+      debugPrint('[FgSensorBridge] Failed to check sensor health: $e');
+      return 'inactive';
     }
   }
 }

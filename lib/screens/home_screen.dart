@@ -6,12 +6,20 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
 import '../models/sos_alert.dart';
+import '../models/emergency_contact.dart';
+import '../models/nearby_place.dart';
+import '../models/app_settings.dart';
 import '../services/location_service.dart';
 import '../services/alert_service.dart';
 import '../services/contact_service.dart';
 import '../services/nearby_places_service.dart';
 import '../services/sms_service.dart';
-import '../models/nearby_place.dart';
+import '../services/settings_service.dart';
+import '../services/emergency_alert_sound_service.dart';
+import '../services/emergency_vibration_service.dart';
+import '../services/foreground_sensor_bridge.dart';
+import '../services/sync_queue_service.dart';
+import '../services/live_location_service.dart';
 import 'emergency_contacts_screen.dart';
 import 'nearby_services_screen.dart';
 import 'alert_history_screen.dart';
@@ -355,39 +363,75 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       final data = await LocationService.getLocationData();
       final contacts = await ContactService.getContacts();
 
+      final eventId = DateTime.now().millisecondsSinceEpoch.toString();
+
       // Send SMS via Backend
-      String smsStatus = 'pending';
+      SmsDeliveryResult? smsResult;
       try {
-        smsStatus = await SmsService.sendEmergencySMS(
+        smsResult = await SmsService.sendEmergencySMS(
+          eventId: eventId,
           latitude: data.latitude,
           longitude: data.longitude,
           googleMapsLink: data.googleMapsLink,
         );
       } catch (e) {
-        smsStatus = 'failed';
+        smsResult = SmsDeliveryResult(overallStatus: 'failed', contactStatuses: {});
+      }
+
+      // 6. Save alert to history
+      final contactStatuses = <Map<String, dynamic>>[];
+      for (var c in contacts) {
+        final num = SmsService.formatPhoneNumber(c.phone);
+        final status = smsResult.contactStatuses[num] ?? 'failed';
+        contactStatuses.add({
+          'name': c.name,
+          'phone': num,
+          'status': status,
+        });
       }
 
       // Save alert to history
       final alert = SosAlert(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: eventId,
         timestamp: DateTime.now(),
         latitude: data.latitude,
         longitude: data.longitude,
         googleMapsLink: data.googleMapsLink,
         alertType: 'SOS',
-        smsDeliveryStatus: smsStatus,
+        smsDeliveryStatus: smsResult.overallStatus,
+        contactDeliveryStatuses: contactStatuses,
       );
       await AlertService.saveAlert(alert);
+
+      // Enqueue SMS delivery task if queued or failed
+      if (smsResult.overallStatus == 'queued' || smsResult.overallStatus == 'failed') {
+        await SyncQueueService().enqueue(
+          QueueItem(
+            id: 'sms_$eventId',
+            type: QueueItemType.smsDelivery,
+            timestamp: DateTime.now(),
+            payload: {
+              'eventId': eventId,
+              'latitude': data.latitude,
+              'longitude': data.longitude,
+              'googleMapsLink': data.googleMapsLink,
+            },
+          ),
+        );
+      }
+
+      // Start live tracking session
+      LiveLocationService().startSharing(eventId);
 
       // Update location display
       setState(() {
         _gpsCoords =
-            '${data.latitude.toStringAsFixed(4)}┬░, ${data.longitude.toStringAsFixed(4)}┬░';
+            '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
         _locationText = 'Live location active';
       });
 
       if (mounted) {
-        _showSOSConfirmation(data, contacts.length, smsStatus);
+        _showSOSConfirmation(data, contacts, smsResult);
       }
     } on LocationException catch (e) {
       if (mounted) {
@@ -411,28 +455,63 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     try {
       final data = await LocationService.getLocationData();
 
+      final eventId = DateTime.now().millisecondsSinceEpoch.toString();
+
       // Send SMS via Backend
-      String smsStatus = 'pending';
+      SmsDeliveryResult? smsResult;
       try {
-        smsStatus = await SmsService.sendEmergencySMS(
+        smsResult = await SmsService.sendEmergencySMS(
+          eventId: eventId,
           latitude: data.latitude,
           longitude: data.longitude,
           googleMapsLink: data.googleMapsLink,
         );
       } catch (e) {
-        smsStatus = 'failed';
+        smsResult = SmsDeliveryResult(overallStatus: 'failed', contactStatuses: {});
+      }
+      
+      final contacts = await ContactService.getContacts();
+      final contactStatuses = <Map<String, dynamic>>[];
+      for (var c in contacts) {
+        final num = SmsService.formatPhoneNumber(c.phone);
+        final status = smsResult.contactStatuses[num] ?? 'failed';
+        contactStatuses.add({
+          'name': c.name,
+          'phone': num,
+          'status': status,
+        });
       }
 
       final alert = SosAlert(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: eventId,
         timestamp: DateTime.now(),
         latitude: data.latitude,
         longitude: data.longitude,
         googleMapsLink: data.googleMapsLink,
         alertType: type,
-        smsDeliveryStatus: smsStatus,
+        smsDeliveryStatus: smsResult.overallStatus,
+        contactDeliveryStatuses: contactStatuses,
       );
       await AlertService.saveAlert(alert);
+
+      if (smsResult.overallStatus == 'queued' || smsResult.overallStatus == 'failed') {
+        await SyncQueueService().enqueue(
+          QueueItem(
+            id: 'sms_$eventId',
+            type: QueueItemType.smsDelivery,
+            timestamp: DateTime.now(),
+            payload: {
+              'eventId': eventId,
+              'latitude': data.latitude,
+              'longitude': data.longitude,
+              'googleMapsLink': data.googleMapsLink,
+            },
+          ),
+        );
+      }
+
+      // Start live tracking session
+      LiveLocationService().startSharing(eventId);
 
       setState(() {
         _gpsCoords =
@@ -440,7 +519,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       });
 
       if (mounted) {
-        _showSOSConfirmation(data, 0, smsStatus);
+        _showSOSConfirmation(data, contacts, smsResult);
       }
     } on LocationException catch (e) {
       if (mounted) _showErrorSnackbar(e.message);
@@ -451,7 +530,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     }
   }
 
-  void _showSOSConfirmation(LocationData data, int contactCount, String smsStatus) {
+  void _showSOSConfirmation(LocationData data, List<EmergencyContact> contacts, SmsDeliveryResult? smsResult) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -499,18 +578,18 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               Text('SOS ALERT LOGGED', style: AppTheme.headingSmall),
               const SizedBox(height: 8),
               
-              if (smsStatus == 'sent')
+              if (smsResult?.overallStatus == 'sent')
                 Text(
-                  'Alert sent to $contactCount emergency contacts.',
+                  'Alert sent to ${contacts.length} emergency contacts.',
                   style: AppTheme.bodyMedium.copyWith(color: AppTheme.successGreen),
                 )
-              else if (smsStatus == 'queued')
+              else if (smsResult?.overallStatus == 'queued')
                 Text(
                   'Network unavailable.\nEmergency alert saved and queued.',
                   textAlign: TextAlign.center,
                   style: AppTheme.bodyMedium.copyWith(color: AppTheme.warningAmber),
                 )
-              else if (smsStatus == 'failed_no_provider')
+              else if (smsResult?.overallStatus == 'failed_no_provider')
                 Text(
                   'Alert logged locally.\nSMS Not Sent: Provider credentials missing in backend.',
                   textAlign: TextAlign.center,
@@ -556,7 +635,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                             color: AppTheme.textMuted, size: 18),
                         const SizedBox(width: 8),
                         Text(
-                          '$contactCount emergency contact${contactCount == 1 ? '' : 's'} saved',
+                          '${contacts.length} emergency contact${contacts.length == 1 ? '' : 's'} saved',
                           style: AppTheme.bodySmall,
                         ),
                       ],
@@ -674,6 +753,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   _buildTopBar(),
+                  _buildLiveLocationBanner(),
                   const SizedBox(height: 16),
                   _buildSOSButton(),
                   const SizedBox(height: 20),
@@ -691,56 +771,69 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
               ),
             ),
           ),
-
-          // ── Temporary Test Emergency Button (for testing popup) ──
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: _buildTestEmergencyButton(),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildTestEmergencyButton() {
-    return GestureDetector(
-      onTap: () {
-        AccidentAlertDialog.show(
-          context,
-          onSendSOS: _triggerSOS,
+  Widget _buildLiveLocationBanner() {
+    return StreamBuilder<bool>(
+      stream: LiveLocationService().statusStream,
+      initialData: LiveLocationService().isActive,
+      builder: (context, snapshot) {
+        final isActive = snapshot.data ?? false;
+        if (!isActive) return const SizedBox.shrink();
+        
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: AppTheme.redGradient,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.emergencyRed.withValues(alpha: 0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.emergency_share, color: Colors.white, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Live location sharing active',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Your location is being updated periodically.',
+                      style: AppTheme.bodySmall.copyWith(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.stop_circle, color: Colors.white, size: 32),
+                onPressed: () {
+                  LiveLocationService().stopSharing();
+                },
+                tooltip: 'Stop Sharing',
+              ),
+            ],
+          ),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppTheme.emergencyRed,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.emergencyRed.withValues(alpha: 0.35),
-              blurRadius: 16,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              'Test Emergency',
-              style: AppTheme.bodyMedium.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

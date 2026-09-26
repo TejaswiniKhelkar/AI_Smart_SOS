@@ -17,6 +17,9 @@ class SosAlert {
   final String? smsDeliveryStatus; // 'sent', 'failed', 'pending'
   final String? emergencyStatus; // 'active', 'resolved', 'false_alarm'
   final int? responseTimeSeconds;
+  
+  // ── Enhanced fields (Phase 6) ─────────────────────────────────────────
+  final List<Map<String, dynamic>>? contactDeliveryStatuses; // Detailed per-contact delivery status
 
   SosAlert({
     required this.id,
@@ -33,7 +36,44 @@ class SosAlert {
     this.smsDeliveryStatus,
     this.emergencyStatus,
     this.responseTimeSeconds,
+    this.contactDeliveryStatuses,
   });
+
+  SosAlert copyWith({
+    String? id,
+    DateTime? timestamp,
+    double? latitude,
+    double? longitude,
+    String? googleMapsLink,
+    String? alertType,
+    String? status,
+    int? contactsNotified,
+    int? nearbyHospitalCount,
+    int? nearbyPoliceCount,
+    int? nearbyAmbulanceCount,
+    String? smsDeliveryStatus,
+    String? emergencyStatus,
+    int? responseTimeSeconds,
+    List<Map<String, dynamic>>? contactDeliveryStatuses,
+  }) {
+    return SosAlert(
+      id: id ?? this.id,
+      timestamp: timestamp ?? this.timestamp,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      googleMapsLink: googleMapsLink ?? this.googleMapsLink,
+      alertType: alertType ?? this.alertType,
+      status: status ?? this.status,
+      contactsNotified: contactsNotified ?? this.contactsNotified,
+      nearbyHospitalCount: nearbyHospitalCount ?? this.nearbyHospitalCount,
+      nearbyPoliceCount: nearbyPoliceCount ?? this.nearbyPoliceCount,
+      nearbyAmbulanceCount: nearbyAmbulanceCount ?? this.nearbyAmbulanceCount,
+      smsDeliveryStatus: smsDeliveryStatus ?? this.smsDeliveryStatus,
+      emergencyStatus: emergencyStatus ?? this.emergencyStatus,
+      responseTimeSeconds: responseTimeSeconds ?? this.responseTimeSeconds,
+      contactDeliveryStatuses: contactDeliveryStatuses ?? this.contactDeliveryStatuses,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -50,6 +90,7 @@ class SosAlert {
         'smsDeliveryStatus': smsDeliveryStatus,
         'emergencyStatus': emergencyStatus,
         'responseTimeSeconds': responseTimeSeconds,
+        'contactDeliveryStatuses': contactDeliveryStatuses,
       };
 
   factory SosAlert.fromJson(Map<String, dynamic> json) {
@@ -61,7 +102,6 @@ class SosAlert {
       googleMapsLink: json['googleMapsLink'] as String,
       alertType: json['alertType'] as String,
       status: json['status'] as String? ?? 'sent',
-      // Backward compatible: old alerts won't have these fields
       contactsNotified: json['contactsNotified'] as int?,
       nearbyHospitalCount: json['nearbyHospitalCount'] as int?,
       nearbyPoliceCount: json['nearbyPoliceCount'] as int?,
@@ -69,6 +109,9 @@ class SosAlert {
       smsDeliveryStatus: json['smsDeliveryStatus'] as String?,
       emergencyStatus: json['emergencyStatus'] as String?,
       responseTimeSeconds: json['responseTimeSeconds'] as int?,
+      contactDeliveryStatuses: json['contactDeliveryStatuses'] != null 
+          ? List<Map<String, dynamic>>.from(json['contactDeliveryStatuses'])
+          : null,
     );
   }
 

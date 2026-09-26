@@ -161,6 +161,8 @@ class _SignupScreenState extends State<SignupScreen>
     // Send verification email
     await AuthService.sendEmailVerification();
 
+    if (!mounted) return;
+
     Navigator.pushAndRemoveUntil(
       context,
       PageRouteBuilder(

@@ -46,10 +46,19 @@ class ContactService {
     return _readLocalCache(prefs);
   }
 
-  /// Adds a new emergency contact.
+  /// Adds a new emergency contact. Returns true if successful, false if duplicate.
   static Future<bool> addContact(EmergencyContact contact) async {
     final prefs = await SharedPreferences.getInstance();
     final contacts = await _readLocalCache(prefs);
+    
+    // Prevent duplicates by checking normalized phone numbers
+    String normalize(String phone) => phone.replaceAll(RegExp(r'\D'), '');
+    final newPhoneNorm = normalize(contact.phone);
+    
+    if (contacts.any((c) => normalize(c.phone) == newPhoneNorm)) {
+      return false; // Duplicate found
+    }
+
     contacts.add(contact);
     await _updateLocalCache(prefs, contacts);
     await _syncOrQueue(contacts);

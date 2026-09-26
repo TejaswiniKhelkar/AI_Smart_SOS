@@ -4,6 +4,7 @@ import '../models/app_settings.dart';
 import '../services/settings_service.dart';
 import '../services/foreground_sensor_bridge.dart';
 import '../widgets/reusable_widgets.dart';
+import 'dart:async';
 
 class AiSettingsScreen extends StatefulWidget {
   const AiSettingsScreen({super.key});
@@ -19,6 +20,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
 
   AppSettings _settings = AppSettings();
   bool _isLoading = true;
+  String _sensorStatus = 'checking'; // 'active', 'inactive', 'failed', 'unavailable', 'checking'
+  Timer? _statusTimer;
 
   @override
   void initState() {
@@ -32,10 +35,26 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
       curve: Curves.easeOutCubic,
     );
     _loadSettings();
+    _startStatusTimer();
+  }
+
+  void _startStatusTimer() {
+    _statusTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!mounted) return;
+      if (!_settings.accidentDetection) {
+        setState(() => _sensorStatus = 'inactive');
+        return;
+      }
+      final status = await ForegroundSensorBridge.instance.checkSensorHealth();
+      if (mounted) {
+        setState(() => _sensorStatus = status);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _fadeController.dispose();
     super.dispose();
   }
@@ -262,14 +281,120 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
               onChanged: (v) {
                 _updateSetting(_settings.copyWith(accidentDetection: v));
                 if (v) {
+                  setState(() => _sensorStatus = 'checking');
                   ForegroundSensorBridge.instance.start();
                 } else {
+                  setState(() => _sensorStatus = 'inactive');
                   ForegroundSensorBridge.instance.stop();
                 }
               },
             ),
+            _buildDivider(),
+            _buildSensorStatusIndicator(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSensorStatusIndicator() {
+    Color dotColor;
+    String statusText;
+    String subText;
+    
+    switch (_sensorStatus) {
+      case 'active':
+        dotColor = AppTheme.successGreen;
+        statusText = 'Accident Detection Active';
+        subText = 'Sensors monitoring in background';
+        break;
+      case 'checking':
+        dotColor = AppTheme.warningAmber;
+        statusText = 'Checking Sensors...';
+        subText = 'Verifying sensor availability';
+        break;
+      case 'failed':
+        dotColor = AppTheme.emergencyRed;
+        statusText = 'Accident Detection Inactive';
+        subText = 'Sensor monitoring is not running (Restart app)';
+        break;
+      case 'unavailable':
+        dotColor = AppTheme.emergencyRed;
+        statusText = 'Accident Detection Unavailable';
+        subText = 'Required sensor unavailable on this device.';
+        break;
+      case 'inactive':
+      default:
+        dotColor = AppTheme.emergencyRed;
+        statusText = 'Accident Detection Inactive';
+        subText = 'Sensor monitoring is stopped';
+        break;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: dotColor,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: dotColor.withValues(alpha: 0.5),
+                  blurRadius: 6,
+                  spreadRadius: 1,
+                )
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  statusText,
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  subText,
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_sensorStatus == 'failed' || _sensorStatus == 'checking' && _settings.accidentDetection)
+            GestureDetector(
+              onTap: () {
+                setState(() => _sensorStatus = 'checking');
+                ForegroundSensorBridge.instance.stop().then((_) {
+                  ForegroundSensorBridge.instance.start();
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.glassWhite,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.glassBorder),
+                ),
+                child: Text('Retry',
+                    style: AppTheme.bodySmall.copyWith(
+                        color: AppTheme.primaryCyan,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ),
+        ],
       ),
     );
   }

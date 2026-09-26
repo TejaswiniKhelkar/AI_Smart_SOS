@@ -128,10 +128,11 @@ class LocationService {
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1');
       final response = await http.get(url, headers: {
         'User-Agent': 'AI Smart SOS/1.0',
+        'Accept-Language': 'en',
       }).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         if (data != null && data['address'] != null) {
           final address = data['address'];
           final parts = <String>[];

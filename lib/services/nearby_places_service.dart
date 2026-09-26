@@ -45,6 +45,7 @@ out center;
           'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent': 'AI Smart SOS/1.0',
           'Accept': 'application/json',
+          'Accept-Language': 'en',
         },
         body: {
           'data': query,
@@ -55,9 +56,9 @@ out center;
         throw Exception('Failed to fetch nearby places (${response.statusCode})');
       }
 
-      final data = json.decode(response.body);
-    final elements = data['elements'] as List;
-    const distance = Distance();
+      final data = json.decode(utf8.decode(response.bodyBytes));
+      final elements = data['elements'] as List;
+      const distance = Distance();
     final userLocation = LatLng(lat, lng);
 
     final places = <NearbyPlace>[];

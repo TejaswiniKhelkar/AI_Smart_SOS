@@ -1,5 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -449,84 +451,33 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
   }
 
   Future<void> _triggerQuickAction(String type) async {
-    if (_isSending) return;
-    setState(() => _isSending = true);
+    String number;
+    if (type == 'Police') number = '100';
+    else if (type == 'Ambulance') number = '108';
+    else if (type == 'Fire') number = '101';
+    else return;
 
-    try {
-      final data = await LocationService.getLocationData();
+    // We do NOT set _isSending = true because a quick action is just a phone call.
+    
+    // Check permissions
+    var status = await Permission.phone.status;
+    if (!status.isGranted) {
+      status = await Permission.phone.request();
+    }
 
-      final eventId = DateTime.now().millisecondsSinceEpoch.toString();
-
-      // Send SMS via Backend
-      SmsDeliveryResult? smsResult;
+    if (status.isGranted) {
       try {
-        smsResult = await SmsService.sendEmergencySMS(
-          eventId: eventId,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          googleMapsLink: data.googleMapsLink,
-        );
+        const platform = MethodChannel('com.example.ai_smart_sos/foreground_sensor');
+        await platform.invokeMethod('makeDirectCall', {'number': number});
       } catch (e) {
-        smsResult = SmsDeliveryResult(overallStatus: 'failed', contactStatuses: {});
+        // Fallback to dialer
+        final Uri launchUri = Uri(scheme: 'tel', path: number);
+        await launchUrl(launchUri);
       }
-      
-      final contacts = await ContactService.getContacts();
-      final contactStatuses = <Map<String, dynamic>>[];
-      for (var c in contacts) {
-        final num = SmsService.formatPhoneNumber(c.phone);
-        final status = smsResult.contactStatuses[num] ?? 'failed';
-        contactStatuses.add({
-          'name': c.name,
-          'phone': num,
-          'status': status,
-        });
-      }
-
-      final alert = SosAlert(
-        id: eventId,
-        timestamp: DateTime.now(),
-        latitude: data.latitude,
-        longitude: data.longitude,
-        googleMapsLink: data.googleMapsLink,
-        alertType: type,
-        smsDeliveryStatus: smsResult.overallStatus,
-        contactDeliveryStatuses: contactStatuses,
-      );
-      await AlertService.saveAlert(alert);
-
-      if (smsResult.overallStatus == 'queued' || smsResult.overallStatus == 'failed') {
-        await SyncQueueService().enqueue(
-          QueueItem(
-            id: 'sms_$eventId',
-            type: QueueItemType.smsDelivery,
-            timestamp: DateTime.now(),
-            payload: {
-              'eventId': eventId,
-              'latitude': data.latitude,
-              'longitude': data.longitude,
-              'googleMapsLink': data.googleMapsLink,
-            },
-          ),
-        );
-      }
-
-      // Start live tracking session
-      LiveLocationService().startSharing(eventId);
-
-      setState(() {
-        _gpsCoords =
-            '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
-      });
-
-      if (mounted) {
-        _showSOSConfirmation(data, contacts, smsResult);
-      }
-    } on LocationException catch (e) {
-      if (mounted) _showErrorSnackbar(e.message);
-    } catch (e) {
-      if (mounted) _showErrorSnackbar('Failed: $e');
-    } finally {
-      if (mounted) setState(() => _isSending = false);
+    } else {
+      // Permission denied, fallback to dialer
+      final Uri launchUri = Uri(scheme: 'tel', path: number);
+      await launchUrl(launchUri);
     }
   }
 
@@ -1523,7 +1474,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${place.distanceText} ΓÇó ${place.address ?? "Unknown Address"}',
+                                    '${place.distanceText} • ${place.address ?? "Unknown Address"}',
                                     style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,

@@ -120,6 +120,21 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "makeDirectCall" -> {
+                    val number = call.argument<String>("number")
+                    if (number != null) {
+                        try {
+                            val intent = Intent(Intent.ACTION_CALL)
+                            intent.data = android.net.Uri.parse("tel:$number")
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("CALL_FAILED", e.message, null)
+                        }
+                    } else {
+                        result.error("INVALID_ARG", "Number is required", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

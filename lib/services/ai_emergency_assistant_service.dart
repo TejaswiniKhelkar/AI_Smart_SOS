@@ -19,6 +19,7 @@ class AiEmergencyAssistantService {
     Map<String, dynamic>? location,
     List<Map<String, dynamic>>? nearbyPlaces,
     String? language,
+    List<Map<String, String>>? history,
   }) async {
     final message = prompt.trim();
     if (message.isEmpty) {
@@ -41,6 +42,7 @@ class AiEmergencyAssistantService {
           location: location,
           nearbyPlaces: nearbyPlaces,
           language: language,
+          history: history,
         );
         if (response.isNotEmpty) return response.trim();
         throw Exception('Received empty response from AI service.');

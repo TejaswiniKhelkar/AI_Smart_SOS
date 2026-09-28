@@ -180,6 +180,14 @@ class _AiEmergencyDashboardScreenState
       } catch (_) {}
     } catch (_) {}
 
+    final historyList = _messages
+        .take(_messages.length - 1)
+        .map((m) => {
+              'role': m.role == _MessageRole.user ? 'user' : 'assistant',
+              'content': m.text,
+            })
+        .toList();
+
     try {
       final response = await _assistantService.getResponse(
         message,
@@ -187,6 +195,7 @@ class _AiEmergencyDashboardScreenState
         location: locationMap,
         nearbyPlaces: nearbyMap,
         language: _assistantLanguage,
+        history: historyList,
       );
       if (!mounted) return;
       setState(() {
@@ -403,7 +412,7 @@ class _AiEmergencyDashboardScreenState
   @override
   Widget build(BuildContext context) {
     return Container(
-        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+        decoration: BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnim,

@@ -108,7 +108,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+        decoration: BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: ParticleBackground(
           seed: 88,
           child: SafeArea(
@@ -168,7 +168,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
                 color: AppTheme.glassWhite,
                 border: Border.all(color: AppTheme.glassBorder),
               ),
-              child: const Icon(Icons.arrow_back_ios_new,
+              child: Icon(Icons.arrow_back_ios_new,
                   color: AppTheme.textPrimary, size: 18),
             ),
           ),
@@ -599,8 +599,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen>
             subtitle: 'Premium dark emergency interface',
             value: _settings.darkTheme,
             color: const Color(0xFFE040FB),
-            onChanged: (v) =>
-                _updateSetting(_settings.copyWith(darkTheme: v)),
+            onChanged: (v) {
+                _updateSetting(_settings.copyWith(darkTheme: v));
+                ThemeNotifier.instance.value = v;
+            },
           ),
         ],
       ),

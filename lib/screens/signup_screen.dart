@@ -179,7 +179,7 @@ class _SignupScreenState extends State<SignupScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+        decoration: BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: Stack(
           children: [
             // Particle background
@@ -460,7 +460,7 @@ class _SignupScreenState extends State<SignupScreen>
                   onChanged: (v) =>
                       setState(() => _agreedToTerms = v ?? false),
                   activeColor: AppTheme.primaryCyan,
-                  side: const BorderSide(color: AppTheme.textMuted),
+                  side: BorderSide(color: AppTheme.textMuted),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -504,7 +504,7 @@ class _SignupScreenState extends State<SignupScreen>
             decoration: BoxDecoration(
               gradient: _agreedToTerms
                   ? AppTheme.cyanGradient
-                  : const LinearGradient(
+                  : LinearGradient(
                       colors: [AppTheme.surface, AppTheme.surfaceLight],
                     ),
               borderRadius: BorderRadius.circular(16),

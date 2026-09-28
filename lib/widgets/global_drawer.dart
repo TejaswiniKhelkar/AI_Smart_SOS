@@ -59,7 +59,7 @@ class GlobalDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppTheme.glassBorder),
+            Divider(height: 1, color: AppTheme.glassBorder),
             
             _buildNavItem(
               icon: Icons.home_outlined,
@@ -85,7 +85,7 @@ class GlobalDrawer extends StatelessWidget {
                 onTabSelected(2);
               },
             ),
-            const Divider(height: 1, color: AppTheme.glassBorder),
+            Divider(height: 1, color: AppTheme.glassBorder),
             _buildNavItem(
               icon: Icons.contacts_outlined,
               title: 'Emergency Contacts',
@@ -126,7 +126,7 @@ class GlobalDrawer extends StatelessWidget {
                 }
               },
             ),
-            const Divider(height: 1, color: AppTheme.glassBorder),
+            Divider(height: 1, color: AppTheme.glassBorder),
             _buildNavItem(
               icon: Icons.settings_outlined,
               title: 'Settings',

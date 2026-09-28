@@ -89,7 +89,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
                 top: 24,
                 bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
               ),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppTheme.surface,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 border: Border(
@@ -372,7 +372,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+        decoration: BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: Stack(
           children: [
             // Particle background
@@ -701,7 +701,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen>
       child: FloatingActionButton(
         onPressed: () => _showAddEditSheet(),
         backgroundColor: AppTheme.primaryCyan,
-        child: const Icon(Icons.person_add, color: AppTheme.background),
+        child: Icon(Icons.person_add, color: AppTheme.background),
       ),
     );
   }

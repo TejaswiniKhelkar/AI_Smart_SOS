@@ -167,7 +167,7 @@ class _AiProfileScreenState extends State<AiProfileScreen>
   Widget build(BuildContext context) {
     return Container(
         decoration:
-            const BoxDecoration(gradient: AppTheme.backgroundGradient),
+            BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: ParticleBackground(
           seed: 55,
           child: SafeArea(
@@ -235,7 +235,7 @@ class _AiProfileScreenState extends State<AiProfileScreen>
                 color: AppTheme.glassWhite,
                 border: Border.all(color: AppTheme.glassBorder),
               ),
-              child: const Icon(Icons.arrow_back_ios_new,
+              child: Icon(Icons.arrow_back_ios_new,
                   color: AppTheme.textPrimary, size: 18),
             ),
           ),

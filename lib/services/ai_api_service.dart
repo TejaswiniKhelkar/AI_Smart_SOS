@@ -51,6 +51,7 @@ class AiApiService {
     Map<String, dynamic>? location,
     List<Map<String, dynamic>>? nearbyPlaces,
     String? language,
+    List<Map<String, String>>? history,
   }) async {
     final uri = Uri.parse('$backendUrl/api/assistant');
     final body = {
@@ -59,6 +60,7 @@ class AiApiService {
       if (profile != null) 'profile': profile,
       if (location != null) 'location': location,
       if (nearbyPlaces != null) 'nearbyPlaces': nearbyPlaces,
+      if (history != null) 'history': history,
     };
 
     final resp = await http

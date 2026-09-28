@@ -27,7 +27,7 @@ class NearbyServicesScreen extends StatelessWidget {
           style: AppTheme.headingMedium.copyWith(color: AppTheme.textPrimary),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppTheme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
       ),

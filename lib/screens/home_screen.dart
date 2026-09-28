@@ -69,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface.withValues(alpha: 0.95),
-        border: const Border(
+        border: Border(
           top: BorderSide(color: AppTheme.glassBorder, width: 0.5),
         ),
         boxShadow: [
@@ -489,7 +489,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       builder: (ctx) {
         return Container(
           padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             border: Border(

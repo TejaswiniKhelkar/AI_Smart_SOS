@@ -15,6 +15,7 @@ import '../services/sync_queue_service.dart';
 import '../services/live_location_service.dart';
 import '../services/sms_service.dart';
 import '../models/emergency_contact.dart';
+import '../services/settings_service.dart';
 
 /// Full-screen emergency accident detection alert with a 30-second countdown.
 ///
@@ -55,7 +56,7 @@ class AccidentAlertDialog extends StatefulWidget {
 }
 
 class _AccidentAlertDialogState extends State<AccidentAlertDialog>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const int _totalSeconds = 30;
 
   // ── Animation Controllers ──────────────────────────────────────────────
@@ -74,6 +75,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
   late AnimationController _particleController;
 
   int _remaining = _totalSeconds;
+  late final DateTime _endTime;
   Timer? _ticker;
   bool _dismissed = false;
   bool _showSOSTriggered = false;
@@ -103,6 +105,8 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
   @override
   void initState() {
     super.initState();
+    _endTime = DateTime.now().add(const Duration(seconds: _totalSeconds));
+    WidgetsBinding.instance.addObserver(this);
     AccidentAlertDialog.currentState = this;
 
     // ── Countdown (drives the circular ring) ──
@@ -180,14 +184,21 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
       CurvedAnimation(parent: _confirmationController, curve: Curves.easeOut),
     );
 
-    // ── Start emergency alert sound & vibration ──
-    _alertSound.start();
-    _alertVibration.start();
+    // ── Start emergency alert sound & vibration based on settings ──
+    SettingsService.getSettings().then((settings) {
+      if (mounted && !_dismissed) {
+        if (settings.notificationSound) _alertSound.start();
+        if (settings.emergencyVibration) _alertVibration.start();
+      }
+    });
 
     // ── Countdown ticker ──
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _dismissed || _showSOSTriggered) return;
-      setState(() => _remaining--);
+      
+      final now = DateTime.now();
+      final remaining = _endTime.difference(now).inSeconds;
+      setState(() => _remaining = remaining > 0 ? remaining : 0);
 
       // Switch to urgent (faster) beep & vibration in the last 10 seconds
       if (_remaining <= 10 && _remaining > 0) {
@@ -241,6 +252,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (AccidentAlertDialog.currentState == this) {
       AccidentAlertDialog.currentState = null;
     }
@@ -259,6 +271,19 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
     _particleController.dispose();
     _confirmationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (!_dismissed && !_showSOSTriggered) {
+        final remaining = _endTime.difference(DateTime.now()).inSeconds;
+        if (remaining <= 0) {
+          _ticker?.cancel();
+          _triggerSOSConfirmation();
+        }
+      }
+    }
   }
 
   void dismissSafe() {
@@ -291,23 +316,35 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
 
     // ── Perform the full SOS workflow using existing services ──
     try {
-      // 1. Get current GPS location
-      final data = await LocationService.getLocationData();
-      // 2. Google Maps link is already part of LocationData
+      // 1. Get current GPS location, with fallback if it fails
+      LocationData? data;
+      try {
+        data = await LocationService.getLocationData();
+      } catch (e) {
+        debugPrint('[AccidentAlert] Failed to get location: $e');
+        data = LocationData(
+          latitude: 0.0,
+          longitude: 0.0,
+          googleMapsLink: 'Location temporarily unavailable',
+          timestamp: DateTime.now(),
+        );
+      }
 
       // 3. Load emergency contacts
       final contacts = await ContactService.getContacts();
 
       // 4. Create professional SOS message
       final timeStr = DateFormat('hh:mm:ss a \u2013 dd MMM yyyy').format(DateTime.now());
-      final message = '\ud83c\udd98 EMERGENCY SOS ALERT!\n\n'
-          'I need immediate help!\n\n'
-          '\ud83d\udccd My Location:\n'
-          '${data.googleMapsLink}\n\n'
-          '\ud83d\udcc8 Coordinates:\n'
-          '${data.latitude.toStringAsFixed(6)}\u00b0N, '
-          '${data.longitude.toStringAsFixed(6)}\u00b0E\n\n'
-          '\u23f0 Time: $timeStr\n\n'
+      String message = '\ud83c\udd98 EMERGENCY SOS ALERT!\n\nI need immediate help!\n\n';
+      
+      if (data.latitude == 0.0 && data.longitude == 0.0) {
+        message += '\ud83d\udccd My Location:\nTemporarily unavailable\n\n';
+      } else {
+        message += '\ud83d\udccd My Location:\n${data.googleMapsLink}\n\n'
+            '\ud83d\udcc8 Coordinates:\n${data.latitude.toStringAsFixed(6)}\u00b0N, ${data.longitude.toStringAsFixed(6)}\u00b0E\n\n';
+      }
+      
+      message += '\u23f0 Time: $timeStr\n\n'
           '\ud83d\udc65 Emergency contacts notified: ${contacts.length}\n\n'
           'Sent via AI Smart SOS';
 
@@ -381,12 +418,13 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
         });
       }
     } catch (e) {
-      // Even if location fails, still show confirmation
+      // General fallback if contacts fetching or other critical parts fail
+      debugPrint('[AccidentAlert] Critical failure in SOS workflow: $e');
       if (mounted) {
         setState(() {
           _sosMessage = '\ud83c\udd98 EMERGENCY SOS ALERT!\n\n'
               'I need immediate help!\n\n'
-              'Location could not be determined.\n\n'
+              'An error occurred while sending the alert.\n\n'
               '\u23f0 Time: ${DateFormat('hh:mm:ss a').format(DateTime.now())}\n\n'
               'Sent via AI Smart SOS';
           _smsResult = SmsDeliveryResult(overallStatus: 'failed', contactStatuses: {});

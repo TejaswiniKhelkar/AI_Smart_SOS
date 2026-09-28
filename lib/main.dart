@@ -12,6 +12,7 @@ import 'services/impact_detection_service.dart';
 import 'services/accident_motion_detector.dart';
 import 'services/network_service.dart';
 import 'services/sync_queue_service.dart';
+import 'services/settings_service.dart';
 
 @pragma('vm:entry-point')
 void backgroundMain() {
@@ -98,6 +99,9 @@ void main() async {
   NetworkService().init();
   SyncQueueService().init();
   
+  final settings = await SettingsService.getSettings();
+  ThemeNotifier.instance.value = settings.darkTheme;
+  
   runApp(const SmartSOSApp());
 }
 
@@ -106,12 +110,19 @@ class SmartSOSApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      showPerformanceOverlay: false,
-      title: 'AI Smart SOS',
-      theme: AppTheme.lightTheme,
-      home: const SplashScreen(),
+    return ValueListenableBuilder<bool>(
+      valueListenable: ThemeNotifier.instance,
+      builder: (context, isDark, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          showPerformanceOverlay: false,
+          title: 'AI Smart SOS',
+          themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          home: const SplashScreen(),
+        );
+      },
     );
   }
 }

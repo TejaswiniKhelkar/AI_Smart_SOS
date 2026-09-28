@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/sos_alert.dart';
 import '../services/alert_service.dart';
+import '../utils/date_time_utils.dart';
 
 class AlertHistoryScreen extends StatefulWidget {
   const AlertHistoryScreen({super.key});
@@ -44,6 +45,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
   Future<void> _loadAlerts() async {
     final alerts = await AlertService.getAlerts();
+    alerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     setState(() {
       _alerts = alerts;
       _isLoading = false;
@@ -128,9 +130,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   }
 
   Widget _buildAlertCard(SosAlert alert) {
-    final date = alert.timestamp;
-    final String timeStr = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    final String dateStr = '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    final formattedDate = DateTimeUtils.formatAppStandard(alert.timestamp);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -166,12 +166,8 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    timeStr,
-                    style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    dateStr,
-                    style: AppTheme.bodySmall.copyWith(color: AppTheme.textMuted),
+                    formattedDate,
+                    style: AppTheme.bodySmall.copyWith(color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -250,7 +246,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Sync: ${alert.smsDeliveryStatus == 'queued' ? 'Queued' : 'Synced'}',
+                  'Sync: ${alert.smsDeliveryStatus == 'queued' ? 'Queued' : (alert.smsDeliveryStatus == 'failed' ? 'Failed' : 'Synced')}',
                   style: AppTheme.bodySmall.copyWith(
                     color: alert.smsDeliveryStatus == 'sent'
                         ? AppTheme.successGreen

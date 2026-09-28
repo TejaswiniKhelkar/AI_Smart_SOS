@@ -31,6 +31,7 @@ import 'ai_profile_screen.dart';
 import '../services/foreground_sensor_bridge.dart';
 import '../services/settings_service.dart';
 import '../widgets/global_drawer.dart';
+import '../utils/date_time_utils.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -362,7 +363,18 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
     });
 
     try {
-      final data = await LocationService.getLocationData();
+      LocationData? data;
+      try {
+        data = await LocationService.getLocationData();
+      } catch (e) {
+        debugPrint('[HomeScreen] Failed to get location: $e');
+        data = LocationData(
+          latitude: 0.0,
+          longitude: 0.0,
+          googleMapsLink: 'Location temporarily unavailable',
+          timestamp: DateTimeUtils.nowIST(),
+        );
+      }
       final contacts = await ContactService.getContacts();
 
       final eventId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -372,7 +384,7 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       try {
         smsResult = await SmsService.sendEmergencySMS(
           eventId: eventId,
-          latitude: data.latitude,
+          latitude: data!.latitude,
           longitude: data.longitude,
           googleMapsLink: data.googleMapsLink,
         );
@@ -395,8 +407,8 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       // Save alert to history
       final alert = SosAlert(
         id: eventId,
-        timestamp: DateTime.now(),
-        latitude: data.latitude,
+        timestamp: DateTimeUtils.nowIST(),
+        latitude: data!.latitude,
         longitude: data.longitude,
         googleMapsLink: data.googleMapsLink,
         alertType: 'SOS',
@@ -411,10 +423,10 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
           QueueItem(
             id: 'sms_$eventId',
             type: QueueItemType.smsDelivery,
-            timestamp: DateTime.now(),
+            timestamp: DateTimeUtils.nowIST(),
             payload: {
               'eventId': eventId,
-              'latitude': data.latitude,
+              'latitude': data!.latitude,
               'longitude': data.longitude,
               'googleMapsLink': data.googleMapsLink,
             },
@@ -428,21 +440,16 @@ class _HomeBodyState extends State<_HomeBody> with TickerProviderStateMixin {
       // Update location display
       setState(() {
         _gpsCoords =
-            '${data.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
+            '${data!.latitude.toStringAsFixed(4)}°, ${data.longitude.toStringAsFixed(4)}°';
         _locationText = 'Live location active';
       });
-
       if (mounted) {
         _showSOSConfirmation(data, contacts, smsResult);
       }
-    } on LocationException catch (e) {
-      if (mounted) {
-        _showErrorSnackbar(e.message);
-        setState(() => _sosPressed = false);
-      }
+
     } catch (e) {
       if (mounted) {
-        _showErrorSnackbar('Failed to get location: $e');
+        _showErrorSnackbar('Failed to complete SOS: $e');
         setState(() => _sosPressed = false);
       }
     } finally {

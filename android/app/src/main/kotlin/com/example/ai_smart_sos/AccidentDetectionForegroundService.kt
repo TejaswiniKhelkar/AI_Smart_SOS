@@ -190,6 +190,12 @@ class AccidentDetectionForegroundService : Service(), SensorEventListener {
                 }
                 return START_STICKY
             }
+            "ENFORCE_COOLDOWN" -> {
+                mainHandler.post {
+                    backgroundMethodChannel?.invokeMethod("enforceHighConfidenceCooldown", null)
+                }
+                return START_STICKY
+            }
         }
 
         // Normal start — only start once

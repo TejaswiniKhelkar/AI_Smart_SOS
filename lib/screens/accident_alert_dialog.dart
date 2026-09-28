@@ -14,8 +14,11 @@ import '../services/network_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/live_location_service.dart';
 import '../services/sms_service.dart';
-import '../models/emergency_contact.dart';
 import '../services/settings_service.dart';
+import '../services/voice_assistant_service.dart';
+import '../services/foreground_sensor_bridge.dart';
+import '../utils/date_time_utils.dart';
+import '../models/emergency_contact.dart';
 
 /// Full-screen emergency accident detection alert with a 30-second countdown.
 ///
@@ -189,6 +192,9 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
       if (mounted && !_dismissed) {
         if (settings.notificationSound) _alertSound.start();
         if (settings.emergencyVibration) _alertVibration.start();
+        if (settings.aiVoiceGuidance) {
+          VoiceAssistantService().speakEmergencyDetected();
+        }
       }
     });
 
@@ -207,6 +213,15 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
         _shakeController.forward().then((_) {
           if (mounted) _shakeController.reverse();
         });
+        
+        // Voice countdown at 10, 5 seconds
+        if (_remaining == 10 || _remaining == 5) {
+          SettingsService.getSettings().then((settings) {
+            if (settings.aiVoiceGuidance) {
+              VoiceAssistantService().speakCountdown(_remaining);
+            }
+          });
+        }
       }
 
       if (_remaining <= 0) {
@@ -226,7 +241,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
 
   void _updateTime() {
     setState(() {
-      _currentTime = DateFormat('hh:mm:ss a').format(DateTime.now());
+      _currentTime = DateTimeUtils.formatTimeOnly(DateTimeUtils.nowIST());
     });
   }
 
@@ -293,6 +308,15 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
     _clockTimer?.cancel();
     _alertSound.stop();
     _alertVibration.stop();
+    VoiceAssistantService().stop();
+    
+    SettingsService.getSettings().then((settings) {
+      if (settings.aiVoiceGuidance) {
+        VoiceAssistantService().speakSOSCancelled();
+      }
+    });
+
+    ForegroundSensorBridge.instance.enforceHighConfidenceCooldown();
     Navigator.of(context).pop();
   }
 
@@ -308,6 +332,14 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
     _countdownAnim.stop();
     _alertSound.stop();
     _alertVibration.stop();
+    VoiceAssistantService().stop();
+    
+    SettingsService.getSettings().then((settings) {
+      if (settings.aiVoiceGuidance) {
+        VoiceAssistantService().speakSOSActivated();
+      }
+    });
+
     setState(() {
       _showSOSTriggered = true;
       _sosSaving = true;
@@ -326,7 +358,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
           latitude: 0.0,
           longitude: 0.0,
           googleMapsLink: 'Location temporarily unavailable',
-          timestamp: DateTime.now(),
+          timestamp: DateTimeUtils.nowIST(),
         );
       }
 
@@ -334,7 +366,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
       final contacts = await ContactService.getContacts();
 
       // 4. Create professional SOS message
-      final timeStr = DateFormat('hh:mm:ss a \u2013 dd MMM yyyy').format(DateTime.now());
+      final timeStr = DateTimeUtils.formatAppStandard(DateTimeUtils.nowIST());
       String message = '\ud83c\udd98 EMERGENCY SOS ALERT!\n\nI need immediate help!\n\n';
       
       if (data.latitude == 0.0 && data.longitude == 0.0) {
@@ -377,7 +409,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
 
       final alert = SosAlert(
         id: eventId,
-        timestamp: DateTime.now(),
+        timestamp: DateTimeUtils.nowIST(),
         latitude: data.latitude,
         longitude: data.longitude,
         googleMapsLink: data.googleMapsLink,
@@ -393,7 +425,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
           QueueItem(
             id: 'sms_$eventId',
             type: QueueItemType.smsDelivery, // To be added in SyncQueueService
-            timestamp: DateTime.now(),
+            timestamp: DateTimeUtils.nowIST(),
             payload: {
               'eventId': eventId,
               'latitude': data.latitude,
@@ -425,7 +457,7 @@ class _AccidentAlertDialogState extends State<AccidentAlertDialog>
           _sosMessage = '\ud83c\udd98 EMERGENCY SOS ALERT!\n\n'
               'I need immediate help!\n\n'
               'An error occurred while sending the alert.\n\n'
-              '\u23f0 Time: ${DateFormat('hh:mm:ss a').format(DateTime.now())}\n\n'
+              '\u23f0 Time: ${DateTimeUtils.formatTimeOnly(DateTimeUtils.nowIST())}\n\n'
               'Sent via AI Smart SOS';
           _smsResult = SmsDeliveryResult(overallStatus: 'failed', contactStatuses: {});
           _sosSaving = false;

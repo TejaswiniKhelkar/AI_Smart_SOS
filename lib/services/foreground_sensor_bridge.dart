@@ -29,7 +29,19 @@ class ForegroundSensorBridge {
   bool _serviceRunning = false;
   bool _started = false;
   
-  VoidCallback? onAccidentDetected;
+  VoidCallback? _onAccidentDetected;
+  bool _pendingAccidentAlert = false;
+
+  set onAccidentDetected(VoidCallback? callback) {
+    _onAccidentDetected = callback;
+    if (callback != null && _pendingAccidentAlert) {
+      _pendingAccidentAlert = false;
+      // Use microtask to ensure the setting component is fully mounted
+      Future.microtask(() => callback());
+    }
+  }
+
+  VoidCallback? get onAccidentDetected => _onAccidentDetected;
 
   /// Whether the native foreground service is running.
   bool get isServiceRunning => _serviceRunning;
@@ -53,7 +65,11 @@ class ForegroundSensorBridge {
     // Set up the handler for native intents
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onAccidentAlertFromIntent') {
-        onAccidentDetected?.call();
+        if (_onAccidentDetected != null) {
+          _onAccidentDetected!();
+        } else {
+          _pendingAccidentAlert = true;
+        }
       } else if (call.method == 'cancelAccidentAlert') {
         AccidentAlertDialog.currentState?.dismissSafe();
       } else if (call.method == 'triggerImmediateSOS') {
@@ -122,6 +138,16 @@ class ForegroundSensorBridge {
       await _channel.invokeMethod<bool>('dismissAccidentAlert');
     } catch (e) {
       debugPrint('[FgSensorBridge] Failed to dismiss alert: $e');
+    }
+  }
+
+  /// Enforces the high confidence cooldown on the background detector
+  Future<void> enforceHighConfidenceCooldown() async {
+    if (!_serviceRunning) return;
+    try {
+      await _channel.invokeMethod<bool>('enforceHighConfidenceCooldown');
+    } catch (e) {
+      debugPrint('[FgSensorBridge] Failed to enforce cooldown: $e');
     }
   }
 

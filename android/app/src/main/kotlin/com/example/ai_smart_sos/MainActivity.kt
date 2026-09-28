@@ -120,6 +120,19 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "enforceHighConfidenceCooldown" -> {
+                    val intent = Intent(
+                        this,
+                        AccidentDetectionForegroundService::class.java,
+                    ).apply { action = "ENFORCE_COOLDOWN" }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    result.success(true)
+                }
                 "makeDirectCall" -> {
                     val number = call.argument<String>("number")
                     if (number != null) {

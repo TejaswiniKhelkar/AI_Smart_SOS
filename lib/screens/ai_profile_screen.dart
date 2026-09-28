@@ -5,6 +5,7 @@ import '../app_theme.dart';
 import '../models/user_profile.dart';
 import '../services/profile_service.dart';
 import '../widgets/reusable_widgets.dart';
+import '../utils/date_time_utils.dart';
 
 class AiProfileScreen extends StatefulWidget {
   const AiProfileScreen({super.key});
@@ -431,7 +432,7 @@ class _AiProfileScreenState extends State<AiProfileScreen>
                   Expanded(
                     child: Text(
                       _selectedDOB != null
-                          ? '${_selectedDOB!.day}/${_selectedDOB!.month}/${_selectedDOB!.year}'
+                          ? DateTimeUtils.formatDateOnly(_selectedDOB!)
                           : 'Date of Birth',
                       style: AppTheme.bodyMedium.copyWith(
                         color: _selectedDOB != null

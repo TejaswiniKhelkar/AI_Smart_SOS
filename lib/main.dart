@@ -13,6 +13,7 @@ import 'services/accident_motion_detector.dart';
 import 'services/network_service.dart';
 import 'services/sync_queue_service.dart';
 import 'services/settings_service.dart';
+import 'utils/date_time_utils.dart';
 
 @pragma('vm:entry-point')
 void backgroundMain() {
@@ -76,6 +77,9 @@ void backgroundMain() {
     } else if (call.method == 'simulateTestAccident') {
       debugPrint('[BackgroundIsolate] Received diagnostic test command. Firing alert...');
       channel.invokeMethod('showAccidentAlert');
+    } else if (call.method == 'enforceHighConfidenceCooldown') {
+      debugPrint('[BackgroundIsolate] Enforcing cooldown...');
+      detector.enforceHighConfidenceCooldown();
     }
   });
   
@@ -98,6 +102,7 @@ void main() async {
   
   NetworkService().init();
   SyncQueueService().init();
+  DateTimeUtils.init();
   
   final settings = await SettingsService.getSettings();
   ThemeNotifier.instance.value = settings.darkTheme;

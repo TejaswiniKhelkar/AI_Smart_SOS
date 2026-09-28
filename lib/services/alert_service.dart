@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sos_alert.dart';
 import 'network_service.dart';
 import 'sync_queue_service.dart';
+import '../utils/date_time_utils.dart';
 
 /// Manages SOS alert history stored locally via SharedPreferences and synced to Firestore.
 class AlertService {
@@ -57,7 +58,7 @@ class AlertService {
       QueueItem(
         id: alert.id,
         type: QueueItemType.sosAlert,
-        timestamp: DateTime.now(),
+        timestamp: DateTimeUtils.nowIST(),
         payload: alert.toJson(),
       ),
     );

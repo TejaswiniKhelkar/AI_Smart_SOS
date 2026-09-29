@@ -26,23 +26,30 @@ void backgroundMain() {
   final gyroService = GyroscopeService();
   final impactService = ImpactDetectionService(
     accelerometerService: accelService,
-    impactThreshold: 20.0,
+    impactThreshold: 35.0, // High threshold for crash/severe impact
   );
   
   final detector = AccidentMotionDetector(
     impactService: impactService,
     gyroscopeService: gyroService,
-    impactThreshold: 20.0,
-    rotationThreshold: 8.0,
+    impactThreshold: 35.0,
+    rotationThreshold: 15.0, // Require significant abnormal rotation
     filterConfig: const FalsePositiveFilterConfig(
-      handShakeAccelMax: 25.0, // allow harder test shakes to pass through filter
-      pickupAccelMax: 25.0,
+      walkingAccelMax: 25.0, // Suppress running/fast walking
+      handShakeAccelMax: 40.0, // Suppress strong manual shaking
+      handShakeGyroMax: 15.0,
+      pickupAccelMax: 30.0,
+      pickupGyroMax: 15.0,
+      normalRotationAccelMax: 25.0,
+      normalRotationGyroMax: 20.0,
+      gentlePlaceAccelMax: 35.0,
     ),
     confidenceConfig: const ConfidenceAnalysisConfig(
-      strongImpactThreshold: 22.0,
-      strongRotationThreshold: 10.0,
-      minConfidenceScore: 2.0,
-      postImpactStabilityPenalty: 0.0, // Disable stability penalty for testing so it doesn't reject manual tests as "phone drops"
+      strongImpactThreshold: 50.0,
+      strongRotationThreshold: 25.0,
+      minConfidenceScore: 3.0,
+      postImpactStabilityPenalty: -2.0, // CRITICAL: Reject stable phone drops
+      sustainedAbnormalityBonus: 1.5, // Reward sustained erratic motion (real crash)
     ),
   );
   
